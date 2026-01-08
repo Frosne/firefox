@@ -629,6 +629,14 @@ NS_IMETHODIMP
 imgRequest::OnStartRequest(nsIRequest* aRequest) {
   LOG_SCOPE(gImgLog, "imgRequest::OnStartRequest");
 
+   mCrypto = do_CreateInstance(NS_CRYPTO_HASH_CONTRACTID);
+  if (!mCrypto) {
+    printf("Failed to create nsICryptoHash\n");
+    return NS_OK;
+  }
+
+
+
   RefPtr<Image> image;
 
   if (nsCOMPtr<nsIHttpChannel> httpChannel = do_QueryInterface(aRequest)) {
@@ -730,6 +738,23 @@ NS_IMETHODIMP
 imgRequest::OnStopRequest(nsIRequest* aRequest, nsresult status) {
   LOG_FUNC(gImgLog, "imgRequest::OnStopRequest");
   MOZ_ASSERT(NS_IsMainThread(), "Can't send notifications off-main-thread");
+
+  printf("imgRequest::OnStopRequest \n");
+
+  nsAutoCString hash;
+  nsresult rv = mCrypto->Finish(/* binary = */ true, hash);
+  if (NS_FAILED(rv)) {
+    printf("crypto->Finish failed\n");
+    return NS_OK;
+  }
+
+
+  if (mURI) {
+    nsAutoCString spec;
+    mURI->GetSpec(spec);
+      printf("Base64 SHA-256 of %s = %s\n", spec.get(), hash.get());
+
+  }
 
   RefPtr<imgRequest> strongThis = this;
 
@@ -997,6 +1022,56 @@ imgRequest::OnDataAvailable(nsIRequest* aRequest, nsIInputStream* aInStr,
   LOG_SCOPE_WITH_PARAM(gImgLog, "imgRequest::OnDataAvailable", "count", aCount);
 
   NS_ASSERTION(aRequest, "imgRequest::OnDataAvailable -- no request!");
+
+  printf("Calling on data available \n");
+
+  nsresult rv = mCrypto->Init(nsICryptoHash::SHA256);
+  if (NS_FAILED(rv)) {
+    printf("crypto->Init failed\n");
+    return NS_OK;
+  }
+
+  if (aInStr && mCrypto) {
+    nsAutoCString buffer;
+    buffer.SetLength(aCount);
+
+    uint32_t bytesRead = 0;
+
+    nsCOMPtr<nsICloneableInputStream> cloneable = do_QueryInterface(aInStr);
+    if (cloneable && cloneable->GetCloneable()) {
+      printf("Can be interpreted as Clonable stream \n");
+
+      nsCOMPtr<nsIInputStream> aCloneInStrForHash;
+      cloneable->Clone(getter_AddRefs(aCloneInStrForHash));
+
+      // nsCOMPtr<nsISeekableStream> mSeekable (do_QueryInterface(aInStr));
+      // if (!mSeekable)
+      // {
+      //   printf_stderr("Can not be interpreted as Seekable stream \n");
+      // }
+
+      if (aCloneInStrForHash)
+      {
+        nsresult rv = aCloneInStrForHash->Read(buffer.BeginWriting(), aCount, &bytesRead);
+        if (NS_SUCCEEDED(rv) && bytesRead > 0) {
+          mCrypto->Update(reinterpret_cast<const uint8_t*>(buffer.BeginReading()),
+                        bytesRead);
+
+          printf_stderr("Hashed %u bytes from OnDataAvailable\n", bytesRead);
+        }
+        else
+        {
+          printf("The stream is NULL");
+        }
+      }
+    }
+    else
+    {
+      printf("Not cloneable stream, quiting \n");
+    }
+
+  }
+
 
   RefPtr<Image> image;
   RefPtr<ProgressTracker> progressTracker;

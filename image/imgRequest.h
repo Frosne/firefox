@@ -21,6 +21,8 @@
 #include "mozilla/Mutex.h"
 #include "ImageCacheKey.h"
 
+#include "nsICryptoHash.h"
+
 class imgCacheValidator;
 class imgLoader;
 class imgRequestProxy;
@@ -300,6 +302,8 @@ class imgRequest final : public nsIThreadRetargetableStreamListener,
   bool mHadInsecureRedirect : 1 MOZ_GUARDED_BY(mMutex);
   // The ID of the inner window origin, used for error reporting.
   uint64_t mInnerWindowId MOZ_GUARDED_BY(mMutex);
+
+  nsCOMPtr<nsICryptoHash> mCrypto;
 };
 
 #endif  // mozilla_image_imgRequest_h
