@@ -89,6 +89,10 @@ HTTP_ATOM(Sec_WebSocket_Extensions, "Sec-WebSocket-Extensions")
 HTTP_ATOM(Sec_WebSocket_Protocol, "Sec-WebSocket-Protocol")
 HTTP_ATOM(Sec_WebSocket_Version, "Sec-WebSocket-Version")
 HTTP_ATOM(Sec_Fetch_Storage_Access, "Sec-Fetch-Storage-Access")
+// AW: I question that it's correct, v1 here means the version 1 of the spec
+// Would it be possible to support several versions?
+// Would we need to extend the atom list in that case?
+HTTP_ATOM(Sec_WAICT_v1_Manifest, "Sec-WAICT-v1-Manifest")
 HTTP_ATOM(Server, "Server")
 HTTP_ATOM(Server_Timing, "Server-Timing")
 HTTP_ATOM(Service_Worker_Allowed, "Service-Worker-Allowed")

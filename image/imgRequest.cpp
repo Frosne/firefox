@@ -739,8 +739,6 @@ imgRequest::OnStopRequest(nsIRequest* aRequest, nsresult status) {
   LOG_FUNC(gImgLog, "imgRequest::OnStopRequest");
   MOZ_ASSERT(NS_IsMainThread(), "Can't send notifications off-main-thread");
 
-  printf("imgRequest::OnStopRequest \n");
-
   nsAutoCString hash;
   nsresult rv = mCrypto->Finish(/* binary = */ true, hash);
   if (NS_FAILED(rv)) {
@@ -1023,8 +1021,6 @@ imgRequest::OnDataAvailable(nsIRequest* aRequest, nsIInputStream* aInStr,
 
   NS_ASSERTION(aRequest, "imgRequest::OnDataAvailable -- no request!");
 
-  printf("Calling on data available \n");
-
   nsresult rv = mCrypto->Init(nsICryptoHash::SHA256);
   if (NS_FAILED(rv)) {
     printf("crypto->Init failed\n");
@@ -1039,7 +1035,6 @@ imgRequest::OnDataAvailable(nsIRequest* aRequest, nsIInputStream* aInStr,
 
     nsCOMPtr<nsICloneableInputStream> cloneable = do_QueryInterface(aInStr);
     if (cloneable && cloneable->GetCloneable()) {
-      printf("Can be interpreted as Clonable stream \n");
 
       nsCOMPtr<nsIInputStream> aCloneInStrForHash;
       cloneable->Clone(getter_AddRefs(aCloneInStrForHash));
@@ -1057,16 +1052,19 @@ imgRequest::OnDataAvailable(nsIRequest* aRequest, nsIInputStream* aInStr,
           mCrypto->Update(reinterpret_cast<const uint8_t*>(buffer.BeginReading()),
                         bytesRead);
 
-          printf_stderr("Hashed %u bytes from OnDataAvailable\n", bytesRead);
+          // printf_stderr("Hashed %02x bytes from OnDataAvailable\n", bytesRead);
         }
-        else
-        {
-          printf("The stream is NULL");
+        else {
+          printf_stderr("Failed to read from cloned stream for hashing\n");
         }
       }
+      else {
+        printf("Failed to clone input stream for hashing\n");
+      }
     }
-    else
-    {
+    else {
+      // AW: We need to investigate how many streams are not cloneable
+      // AW: For now I saw one or two
       printf("Not cloneable stream, quiting \n");
     }
 

@@ -85,6 +85,7 @@ EXPORTS.mozilla.net += [
     "ReplacedHttpResponse.h",
     "SpeculativeTransaction.h",
     "TimingStruct.h",
+    "WAICTManifestListener.h",
 ]
 
 SOURCES += [
@@ -181,6 +182,7 @@ UNIFIED_SOURCES += [
     "TlsHandshaker.cpp",
     "TLSTransportLayer.cpp",
     "TRRServiceChannel.cpp",
+    "WAICTManifestListener.cpp",
     "WebTransportCertificateVerifier.cpp",
     "WebTransportFlowControl.cpp",
     "WebTransportSessionBase.cpp",

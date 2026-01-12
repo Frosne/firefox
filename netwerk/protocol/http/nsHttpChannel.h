@@ -318,6 +318,8 @@ class nsHttpChannel final : public HttpBaseChannel,
 
   // Add Sec-Fetch-Storage-Access headers based on cookie partitioning
   void AddStorageAccessHeadersToRequest();
+  // Request WAICT manifestt.
+  nsresult FetchWAICTManifest(const nsACString& aManifestPath);
 
  public:
   // returns whether this channel is a retry after receiving the

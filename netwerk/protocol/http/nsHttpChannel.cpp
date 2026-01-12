@@ -158,6 +158,8 @@
 #include "mozilla/dom/ReportDeliver.h"
 #include "mozilla/dom/ReportingHeader.h"
 
+#include "WAICTManifestListener.h"
+
 namespace mozilla {
 
 using namespace dom;
@@ -819,6 +821,59 @@ nsresult nsHttpChannel::PrepareToConnect() {
 
   return ContinuePrepareToConnect();
 }
+
+nsresult
+nsHttpChannel::FetchWAICTManifest(const nsACString& aManifestPath) {
+  printf("=== Fetching WAICT Manifest from: %s\n",
+         PromiseFlatCString(aManifestPath).get());
+  
+  // Build the full URL (resolve relative to current page URL)
+  nsCOMPtr<nsIURI> manifestURI;
+  nsresult rv = NS_NewURI(getter_AddRefs(manifestURI),
+                          aManifestPath,
+                          nullptr, 
+                          mURI);
+  if (NS_FAILED(rv)) {
+    printf("=== Failed to create manifest URI: %x\n", (uint32_t)rv);
+    return rv;
+  }
+  
+  nsAutoCString manifestURL;
+  manifestURI->GetSpec(manifestURL);
+  printf("=== Full manifest URL: %s\n", manifestURL.get());
+
+  nsCOMPtr<nsILoadInfo> loadInfo = mLoadInfo;
+  if (!loadInfo) {
+    return NS_ERROR_FAILURE;
+  }
+
+  nsCOMPtr<nsIChannel> manifestChannel;
+  rv = NS_NewChannelInternal(getter_AddRefs(manifestChannel),
+                             manifestURI,
+                             loadInfo,
+                             nullptr,  // PerformanceStorage
+                             nullptr,  // aLoadGroup
+                             nullptr,  // aCallbacks
+                             nsIRequest::LOAD_NORMAL);
+  
+  if (NS_FAILED(rv)) {
+    printf("=== Failed to create manifest channel: %x\n", (uint32_t)rv);
+    return rv;
+  }
+  
+  // Create a stream listener to receive the manifest data
+  RefPtr<mozilla::net::WAICTManifestListener> listener = new mozilla::net::WAICTManifestListener();
+  
+  rv = manifestChannel->AsyncOpen(listener);
+  if (NS_FAILED(rv)) {
+    printf("=== Failed to open manifest channel: %x\n", (uint32_t)rv);
+    return rv;
+  }
+  
+  printf("=== WAICT Manifest fetch initiated successfully\n");
+  return NS_OK;
+}
+
 
 nsresult nsHttpChannel::ContinuePrepareToConnect() {
   // notify "http-on-modify-request" observers
@@ -3068,6 +3123,22 @@ nsresult nsHttpChannel::ProcessResponse(nsHttpConnectionInfo* aConnInfo) {
   // notify "http-on-examine-response" observers
   gHttpHandler->OnExamineResponse(this);
 
+  // initial document load would cause WAICT manifest fetch
+  if (mLoadFlags & LOAD_INITIAL_DOCUMENT_URI) {
+    nsAutoCString manifestPath;
+    // AW: We kinda expect Firefox to send something like this:
+    // curl -I -H 'Sec-CH-WAICT: 1' http://localhost:8080/
+    // But let's for now just to pretend that the site sends the manifest
+    // in every response header (:
+    nsresult rv = mResponseHead->GetHeader(nsHttp::Sec_WAICT_v1_Manifest,
+                                          manifestPath);
+
+    if (NS_SUCCEEDED(rv) && !manifestPath.IsEmpty()) {
+      printf("=== WAICT Manifest found: %s\n", manifestPath.get());
+      FetchWAICTManifest(manifestPath);
+    }
+
+  }
   return ContinueProcessResponse1(aConnInfo);
 }
 
