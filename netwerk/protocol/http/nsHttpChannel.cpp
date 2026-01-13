@@ -3127,9 +3127,9 @@ nsresult nsHttpChannel::ProcessResponse(nsHttpConnectionInfo* aConnInfo) {
   // initial document load would cause WAICT manifest fetch
 if (mLoadFlags & LOAD_INITIAL_DOCUMENT_URI) {
     nsAutoCString waictHeader;
-    nsresult rv = mResponseHead->GetHeader(Sec_WAICT_v1_Enforce,
+    nsresult rv = mResponseHead->GetHeader(nsHttp::Sec_WAICT_v1_Enforce,
                                           waictHeader);
-  
+
   if (NS_SUCCEEDED(rv) && !waictHeader.IsEmpty()) {
     WAICTHeaderParser waict(waictHeader);
     if (waict.ManifestFound()) {
