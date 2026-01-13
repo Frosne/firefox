@@ -159,6 +159,7 @@
 #include "mozilla/dom/ReportingHeader.h"
 
 #include "WAICTManifestListener.h"
+#include "WAICTHeaderParser.h"
 
 namespace mozilla {
 
@@ -837,7 +838,7 @@ nsHttpChannel::FetchWAICTManifest(const nsACString& aManifestPath) {
     printf("=== Failed to create manifest URI: %x\n", (uint32_t)rv);
     return rv;
   }
-  
+
   nsAutoCString manifestURL;
   manifestURI->GetSpec(manifestURL);
   printf("=== Full manifest URL: %s\n", manifestURL.get());
@@ -3124,21 +3125,30 @@ nsresult nsHttpChannel::ProcessResponse(nsHttpConnectionInfo* aConnInfo) {
   gHttpHandler->OnExamineResponse(this);
 
   // initial document load would cause WAICT manifest fetch
-  if (mLoadFlags & LOAD_INITIAL_DOCUMENT_URI) {
-    nsAutoCString manifestPath;
-    // AW: We kinda expect Firefox to send something like this:
-    // curl -I -H 'Sec-CH-WAICT: 1' http://localhost:8080/
-    // But let's for now just to pretend that the site sends the manifest
-    // in every response header (:
-    nsresult rv = mResponseHead->GetHeader(nsHttp::Sec_WAICT_v1_Manifest,
-                                          manifestPath);
+if (mLoadFlags & LOAD_INITIAL_DOCUMENT_URI) {
+    nsAutoCString waictHeader;
+    nsresult rv = mResponseHead->GetHeader(Sec_WAICT_v1_Enforce,
+                                          waictHeader);
+  
+  if (NS_SUCCEEDED(rv) && !waictHeader.IsEmpty()) {
+    WAICTHeaderParser waict(waictHeader);
+    if (waict.ManifestFound()) {
 
-    if (NS_SUCCEEDED(rv) && !manifestPath.IsEmpty()) {
-      printf("=== WAICT Manifest found: %s\n", manifestPath.get());
-      FetchWAICTManifest(manifestPath);
+      if (waict.MaxAgeSet()) {
+        printf("=== WAICT max-age: %u\n", waict.MaxAge());
+      }
+
+      if (waict.ModeSet()) {
+        printf("=== WAICT mode: %s\n", waict.Mode().get());
+      }
+
+      FetchWAICTManifest(waict.Manifest());
+    } else {
+      // TODO: Adapt from the signaing
+      printf("=== WAICT Header present but no manifest= found\n");
     }
-
   }
+}
   return ContinueProcessResponse1(aConnInfo);
 }
 

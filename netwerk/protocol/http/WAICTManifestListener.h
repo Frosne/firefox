@@ -10,43 +10,20 @@
 #include "nsIStreamListener.h"
 #include "nsString.h"
 
-// // Forward declarations for Rust FFI
-// extern "C" {
-//   struct HashList {
-//     char** hashes;
-//     size_t count;
-//   };
-
-//   struct AssetHash {
-//     char* path;
-//     HashList hashes;
-//   };
-
-//   struct ManifestHashesFFI {
-//     HashList allowed_anywhere;
-//     AssetHash* assets;
-//     size_t assets_count;
-//     char* error_message;
-//   };
-
-//   ManifestHashesFFI* waict_parse_manifest(const char* json_str);
-//   void waict_free_manifest_hashes(ManifestHashesFFI* ptr);
-// }
-
 namespace mozilla {
 namespace net {
 
 class WAICTManifestListener final : public nsIStreamListener {
-public:
+ public:
   NS_DECL_THREADSAFE_ISUPPORTS
   NS_DECL_NSISTREAMLISTENER
   NS_DECL_NSIREQUESTOBSERVER
 
   WAICTManifestListener();
 
-private:
+ private:
   ~WAICTManifestListener();
-  
+
   nsCString mData;
 };
 
