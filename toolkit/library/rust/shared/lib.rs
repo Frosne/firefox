@@ -91,6 +91,8 @@ extern crate ipcclientcerts;
 extern crate qwac_trust_anchors;
 extern crate trust_anchors;
 
+extern crate waict;
+
 #[cfg(any(
     target_os = "android",
     target_os = "macos",
@@ -98,6 +100,7 @@ extern crate trust_anchors;
     all(target_os = "windows", not(target_arch = "aarch64"))
 ))]
 extern crate osclientcerts;
+
 
 #[cfg(not(target_os = "android"))]
 extern crate gkrust_uniffi_components;

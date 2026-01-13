@@ -81,7 +81,9 @@ abridged_certs = { path = "../../../../security/manager/ssl/abridged_certs" }
 cert_storage = { path = "../../../../security/manager/ssl/cert_storage" }
 crypto_hash = { path = "../../../../security/manager/ssl/crypto_hash" }
 data_storage = { path = "../../../../security/manager/ssl/data_storage" }
+
 ipcclientcerts = { path = "../../../../security/manager/ssl/ipcclientcerts" }
+
 mls_gk = { path = "../../../../security/mls/mls_gk" }
 qwac-trust-anchors = { path = "../../../../security/manager/ssl/qwac_trust_anchors" }
 trust-anchors = { path = "../../../../security/manager/ssl/trust_anchors" }
@@ -117,6 +119,9 @@ uritemplate_glue = { path = "../../../../netwerk/base/uritemplate_glue" }
 libz-rs-sys = { version = "0.4.1", features = ["custom-prefix"], optional = true }
 
 gecko-trace = { path = "../../../components/gecko-trace" }
+
+waict = { path = "../../../../security/manager/ssl/waict" }
+
 
 [target.'cfg(any(target_os = "android", target_os = "macos", target_os = "ios", all(target_os = "windows", not(target_arch = "aarch64"))))'.dependencies]
 osclientcerts = { path = "../../../../security/manager/ssl/osclientcerts" }

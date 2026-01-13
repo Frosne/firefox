@@ -42,12 +42,39 @@ WAICTManifestListener::OnDataAvailable(nsIRequest* aRequest,
   return rv;
 }
 
+extern "C" {
+typedef enum {
+    MANIFEST_SUCCESS = 0,
+    MANIFEST_INVALID_SYNTAX = 1,
+    MANIFEST_INVALID_STRUCTURE = 2,
+    MANIFEST_UNSUPPORTED_VERSION = 3,
+    MANIFEST_NULL_POINTER = 4,
+    MANIFEST_INVALID_ENCODING = 5,
+} ManifestErrorCode;
+
+ManifestErrorCode manifest_validate(const char* data, uint32_t data_len);
+
+
+}  // extern "C"
+
 NS_IMETHODIMP
 WAICTManifestListener::OnStopRequest(nsIRequest* aRequest, nsresult aStatus) {
   if (NS_SUCCEEDED(aStatus)) {
-    printf("=== WAICT Manifest received (%u bytes):\n%s\n", 
-           (uint32_t)mData.Length(), 
+    printf("=== WAICT Manifest received (%u bytes):\n%s\n",
+           (uint32_t)mData.Length(),
            mData.get());
+
+    // AW: We don't really need to validate it here, the function to get the hashes
+    // would do that anyway.
+
+    // Validate the manifest
+    ManifestErrorCode result = manifest_validate(mData.get(), mData.Length());
+
+    if (result == MANIFEST_SUCCESS) {
+      printf("=== Manifest validation succeeded\n");
+    } else {
+      printf("=== Manifest validation failed with error code: %d\n", result);
+    }
 
     // // Call Rust FFI to parse and extract hashes
     // auto* result = waict_parse_manifest(mData.get());
