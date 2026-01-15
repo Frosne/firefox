@@ -931,6 +931,7 @@ mod tests {
 }
 
 #[repr(C)]
+#[derive(PartialEq)]
 pub enum ManifestErrorCode {
     Success = 0,
     InvalidSyntax = 1,
@@ -996,6 +997,11 @@ pub struct AllowedAnywhereHashes {
     pub hashes: *const *const c_char,
 }
 pub struct ManifestHashesHandle {
+    version: u32,
+    integrity_policy: CString,
+    bt_server: CString,
+    metadata: Option<CString>,  // JSON string
+
     // Store (path, hash) pairs as CStrings
     asset_pairs: Vec<(CString, CString)>,
     // Store allowed-anywhere hashes as CStrings
@@ -1083,11 +1089,42 @@ pub unsafe extern "C" fn manifest_parse_and_get_hashes(
         }
     }
 
-    // Create handle and return
+    let version = manifest.version;
+    
+    let integrity_policy = match CString::new(manifest.integrity_policy.as_str()) {
+        Ok(s) => s,
+        Err(_) => return ManifestErrorCode::InvalidEncoding,
+    };
+    
+    let bt_server = match CString::new(manifest.bt_server.as_str()) {
+        Ok(s) => s,
+        Err(_) => return ManifestErrorCode::InvalidEncoding,
+    };
+    
+    let metadata = if let Some(meta) = &manifest.metadata {
+        match serde_json::to_string(meta) {
+            Ok(json_str) => match CString::new(json_str) {
+                Ok(s) => Some(s),
+                Err(_) => return ManifestErrorCode::InvalidEncoding,
+            },
+            Err(_) => None,
+        }
+    } else {
+        None
+    };
+
+
+
     let handle = Box::new(ManifestHashesHandle {
+        version,
+        integrity_policy,
+        bt_server,
+        metadata,
         asset_pairs,
         allowed_anywhere,
     });
+
+
     *out_hashes = Box::into_raw(handle);
     ManifestErrorCode::Success
 }}
@@ -1156,7 +1193,7 @@ pub unsafe extern "C" fn manifest_hashes_get_allowed_anywhere(
     for hash_cstr in &handle.allowed_anywhere {
         hash_ptrs.push(hash_cstr.as_ptr());
     }
-    
+
     // Leak the Vec so the pointers remain valid
     let ptrs = hash_ptrs.as_ptr();
     let count = hash_ptrs.len() as u32;
@@ -1169,6 +1206,7 @@ pub unsafe extern "C" fn manifest_hashes_get_allowed_anywhere(
 }}
 
 /// Free a manifest hashes handle
+/// TODO: Release the rest
 ///
 /// # Safety
 /// - `hashes` must be a valid ManifestHashesHandle pointer or null
@@ -1178,3 +1216,85 @@ pub unsafe extern "C" fn manifest_hashes_free(hashes: *mut ManifestHashesHandle)
         drop(Box::from_raw(hashes));
     }
 }}
+
+/// To be extended if I missed some fields
+#[repr(C)]
+pub struct ParsedManifest {
+    pub version: u32,
+    // Do we want something more serious here? I.e. a pair of values?
+    pub integrity_policy: *const c_char,
+    pub bt_server: *const c_char,
+    pub metadata: *const c_char,
+    pub asset_pairs: AssetHashPairs,
+    pub allowed_anywhere: AllowedAnywhereHashes,
+}
+
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn manifest_get_parsed(
+    hashes: *const ManifestHashesHandle,
+) -> ParsedManifest {
+    if hashes.is_null() {
+        return ParsedManifest {
+            version: 0,
+            integrity_policy: ptr::null(),
+            bt_server: ptr::null(),
+            metadata: ptr::null(),
+            asset_pairs: AssetHashPairs {
+                count: 0,
+                pairs: ptr::null(),
+            },
+            allowed_anywhere: AllowedAnywhereHashes {
+                count: 0,
+                hashes: ptr::null(),
+            },
+        };
+    }
+
+    let handle = &*hashes;
+    
+    // Get asset pairs
+    let asset_pairs = manifest_hashes_get_asset_pairs(hashes);
+    
+    // Get allowed anywhere
+    let allowed_anywhere = manifest_hashes_get_allowed_anywhere(hashes);
+    
+    ParsedManifest {
+        version: handle.version,
+        integrity_policy: handle.integrity_policy.as_ptr(),
+        bt_server: handle.bt_server.as_ptr(),
+        metadata: handle.metadata.as_ref().map_or(ptr::null(), |m| m.as_ptr()),
+        asset_pairs,
+        allowed_anywhere,
+    }
+}
+
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn manifest_parse_and_get_all(
+    data: *const c_char,
+    data_len: u32,
+    out_parsed: *mut ParsedManifest,
+    out_handle: *mut *mut ManifestHashesHandle,
+) -> ManifestErrorCode {
+    if out_parsed.is_null() || out_handle.is_null() {
+        return ManifestErrorCode::NullPointer;
+    }
+
+    // First parse and get the handle
+    let result = manifest_parse_and_get_hashes(data, data_len, out_handle);
+
+    // TODO: implement the PartialEq
+    if result != ManifestErrorCode::Success {
+        return result;
+    }
+
+    // Now get the parsed manifest
+    let parsed = manifest_get_parsed(*out_handle);
+    
+    // Fill in the output structure
+    *out_parsed = parsed;
+
+    ManifestErrorCode::Success
+}
+

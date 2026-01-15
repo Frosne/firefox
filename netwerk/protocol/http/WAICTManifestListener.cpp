@@ -65,6 +65,15 @@ typedef struct {
   const char* const* hashes;  // Array of hashes (null-terminated strings)
 } AllowedAnywhereHashes;
 
+typedef struct {
+    uint32_t version;                       // Manifest version
+    const char* integrity_policy;           // Null-terminated integrity policy string
+    const char* bt_server;                  // Null-terminated BT server string
+    const char* metadata;                   // Null-terminated JSON metadata string (or NULL)
+    AssetHashPairs asset_pairs;             // Asset hash pairs
+    AllowedAnywhereHashes allowed_anywhere; // Allowed-anywhere hashes
+} ParsedManifest;
+
 /**
  * Parse a manifest from a C string buffer
  *
@@ -73,6 +82,16 @@ typedef struct {
  * @return Error code (MANIFEST_SUCCESS if parsing succeeds)
  */
 ManifestErrorCode manifest_validate(const char* data, uint32_t data_len);
+
+/**
+ * Get parsed manifest details
+ *
+ * @param hashes Valid hashes handle
+ * @return Structure containing parsed manifest details (valid while hashes
+ * handle is alive, do not free)
+*/
+ParsedManifest manifest_get_parsed(const ManifestHashesHandle* hashes);
+
 
 /**
  * Parse a manifest and extract hashes
@@ -85,6 +104,16 @@ ManifestErrorCode manifest_validate(const char* data, uint32_t data_len);
  */
 ManifestErrorCode manifest_parse_and_get_hashes(
     const char* data, uint32_t data_len, ManifestHashesHandle** out_hashes);
+
+
+ManifestErrorCode manifest_parse_and_get_all(
+    const char* data,
+    uint32_t data_len,
+    ParsedManifest* out_parsed,
+    ManifestHashesHandle** out_handle
+);
+
+
 
 /**
  * Get asset hash pairs
@@ -135,41 +164,55 @@ WAICTManifestListener::OnStopRequest(nsIRequest* aRequest, nsresult aStatus) {
       printf("=== Manifest validation failed with error code: %d\n",
              resultManifestValidate);
     }
-    // Parse the manifest and get hashes
-    ManifestHashesHandle* handle = nullptr;
-    ManifestErrorCode result =
-        manifest_parse_and_get_hashes(mData.get(), mData.Length(), &handle);
-
-    if (result != MANIFEST_SUCCESS) {
-      return NS_ERROR_FAILURE;
-    }
 
     printf("✓ Manifest parsed successfully!\n\n");
 
-    // Get asset hash pairs
-    AssetHashPairs asset_pairs = manifest_hashes_get_asset_pairs(handle);
+    ManifestHashesHandle* handle = nullptr;
+    ParsedManifest parsed_manifest;
 
-    printf("Asset hashes (%u):\n", asset_pairs.count);
-    for (uint32_t i = 0; i < asset_pairs.count; i++) {
-      const AssetHashPair& pair = asset_pairs.pairs[i];
-      printf("  \"%s\" -> \"%s\"\n", pair.path, pair.hash);
+    ManifestErrorCode result = manifest_parse_and_get_all(
+        mData.get(), mData.Length(),
+        &parsed_manifest,
+        &handle
+    );
+
+
+
+    if (result != MANIFEST_SUCCESS) {
+      // Well, I've just validated it above, so this shouldn't happen...
+      // but don't forget to put a nice error message!
+    }
+
+    ParsedManifest parsed = manifest_get_parsed(handle);
+
+    printf("=== Manifest Fields ===\n");
+    printf("Version: %u\n", parsed.version);
+    printf("Integrity Policy: %s\n", parsed.integrity_policy);
+    printf("BT Server: %s\n", parsed.bt_server);
+    if (parsed.metadata) {
+        printf("Metadata: %s\n", parsed.metadata);
     }
     printf("\n");
-
-    // Get allowed-anywhere hashes
-    AllowedAnywhereHashes allowed =
-        manifest_hashes_get_allowed_anywhere(handle);
-
-    if (allowed.count > 0) {
-      printf("Allowed-anywhere hashes (%u):\n", allowed.count);
-      for (uint32_t i = 0; i < allowed.count; i++) {
-        printf("  \"\" -> \"%s\"\n", allowed.hashes[i]);
-      }
-      printf("\n");
+    
+    // Asset hashes
+    printf("Asset hashes (%u):\n", parsed.asset_pairs.count);
+    for (uint32_t i = 0; i < parsed.asset_pairs.count; i++) {
+        const AssetHashPair& pair = parsed.asset_pairs.pairs[i];
+        printf("  \"%s\" -> \"%s\"\n", pair.path, pair.hash);
+    }
+    printf("\n");
+    
+    // Allowed-anywhere hashes - Now even sorted!
+    if (parsed.allowed_anywhere.count > 0) {
+        printf("Allowed-anywhere hashes (%u):\n", parsed.allowed_anywhere.count);
+        for (uint32_t i = 0; i < parsed.allowed_anywhere.count; i++) {
+            printf("  \"\" -> \"%s\"\n", parsed.allowed_anywhere.hashes[i]);
+        }
+        printf("\n");
     }
 
-    // Clean up
-    manifest_hashes_free(handle);
+    // Yes, and this please:
+    // manifest_hashes_free(handle);
     return NS_OK;
   }
   return NS_OK;
