@@ -9,6 +9,8 @@
 #include "nsStreamUtils.h"
 #include <stdio.h>
 
+#include "waict_manifest_parser.h"
+
 namespace mozilla {
 namespace net {
 
@@ -34,131 +36,16 @@ WAICTManifestListener::OnDataAvailable(nsIRequest* aRequest,
   return rv;
 }
 
-extern "C" {
-
-typedef struct ManifestHashesHandle ManifestHashesHandle;
-
-typedef enum {
-  MANIFEST_SUCCESS = 0,
-  MANIFEST_INVALID_SYNTAX = 1,
-  MANIFEST_INVALID_STRUCTURE = 2,
-  MANIFEST_UNSUPPORTED_VERSION = 3,
-  MANIFEST_NULL_POINTER = 4,
-  MANIFEST_INVALID_ENCODING = 5,
-} ManifestErrorCode;
-
-// Single asset hash pair (path + hash)
-typedef struct {
-  const char* path;  // Null-terminated asset path
-  const char* hash;  // Null-terminated hash for this asset
-} AssetHashPair;
-
-// Array of asset hash pairs
-typedef struct {
-  uint32_t count;              // Number of pairs
-  const AssetHashPair* pairs;  // Array of AssetHashPair structs
-} AssetHashPairs;
-
-// Array of allowed-anywhere hashes
-typedef struct {
-  uint32_t count;             // Number of hashes
-  const char* const* hashes;  // Array of hashes (null-terminated strings)
-} AllowedAnywhereHashes;
-
-typedef struct {
-    uint32_t version;                       // Manifest version
-    const char* integrity_policy;           // Null-terminated integrity policy string
-    const char* bt_server;                  // Null-terminated BT server string
-    const char* metadata;                   // Null-terminated JSON metadata string (or NULL)
-    AssetHashPairs asset_pairs;             // Asset hash pairs
-    AllowedAnywhereHashes allowed_anywhere; // Allowed-anywhere hashes
-} ParsedManifest;
-
-/**
- * Parse a manifest from a C string buffer
- *
- * @param data Pointer to the manifest data
- * @param data_len Length of data in bytes
- * @return Error code (MANIFEST_SUCCESS if parsing succeeds)
- */
-ManifestErrorCode manifest_validate(const char* data, uint32_t data_len);
-
-/**
- * Get parsed manifest details
- *
- * @param hashes Valid hashes handle
- * @return Structure containing parsed manifest details (valid while hashes
- * handle is alive, do not free)
-*/
-ParsedManifest manifest_get_parsed(const ManifestHashesHandle* hashes);
-
-
-/**
- * Parse a manifest and extract hashes
- *
- * @param data Pointer to the manifest data
- * @param data_len Length of data in bytes
- * @param out_hashes Output pointer to receive the hashes handle (must be freed
- * with manifest_hashes_free)
- * @return Error code (MANIFEST_SUCCESS if parsing succeeds)
- */
-ManifestErrorCode manifest_parse_and_get_hashes(
-    const char* data, uint32_t data_len, ManifestHashesHandle** out_hashes);
-
-
-ManifestErrorCode manifest_parse_and_get_all(
-    const char* data,
-    uint32_t data_len,
-    ParsedManifest* out_parsed,
-    ManifestHashesHandle** out_handle
-);
-
-
-
-/**
- * Get asset hash pairs
- * Returns an array of structs, each containing a path and its hash
- *
- * @param hashes Valid hashes handle
- * @return Structure containing count and array (valid while hashes handle is
- * alive, do not free)
- */
-AssetHashPairs manifest_hashes_get_asset_pairs(
-    const ManifestHashesHandle* hashes);
-
-/**
- * Get allowed-anywhere hashes
- * Returns array of hashes that can be used for any resource
- *
- * @param hashes Valid hashes handle
- * @return Structure containing count and array (valid while hashes handle is
- * alive, do not free)
- */
-AllowedAnywhereHashes manifest_hashes_get_allowed_anywhere(
-    const ManifestHashesHandle* hashes);
-
-/**
- * Free a manifest hashes handle
- *
- * @param hashes Hashes handle to free (can be null)
- */
-void manifest_hashes_free(ManifestHashesHandle* hashes);
-
-}  // extern "C"
-
 NS_IMETHODIMP
 WAICTManifestListener::OnStopRequest(nsIRequest* aRequest, nsresult aStatus) {
   if (NS_SUCCEEDED(aStatus)) {
     printf("=== WAICT Manifest received (%u bytes):\n%s\n",
            (uint32_t)mData.Length(), mData.get());
 
-    // AW: We don't really need to validate it here, the function to get the
-    // hashes would do that anyway.
-
     ManifestErrorCode resultManifestValidate =
         manifest_validate(mData.get(), mData.Length());
 
-    if (resultManifestValidate == MANIFEST_SUCCESS) {
+    if (resultManifestValidate == ManifestErrorCode::Success) {
       printf("=== Manifest validation succeeded\n");
     } else {
       printf("=== Manifest validation failed with error code: %d\n",
@@ -168,22 +55,21 @@ WAICTManifestListener::OnStopRequest(nsIRequest* aRequest, nsresult aStatus) {
     printf("✓ Manifest parsed successfully!\n\n");
 
     ManifestHashesHandle* handle = nullptr;
-    ParsedManifest parsed_manifest;
+    ParsedManifest parsed;
 
     ManifestErrorCode result = manifest_parse_and_get_all(
         mData.get(), mData.Length(),
-        &parsed_manifest,
+        &parsed,
         &handle
     );
 
-
-
-    if (result != MANIFEST_SUCCESS) {
+    if (result != ManifestErrorCode::Success) {
       // Well, I've just validated it above, so this shouldn't happen...
       // but don't forget to put a nice error message!
+      return NS_OK;
     }
 
-    ParsedManifest parsed = manifest_get_parsed(handle);
+
 
     printf("=== Manifest Fields ===\n");
     printf("Version: %u\n", parsed.version);

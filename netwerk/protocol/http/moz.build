@@ -227,6 +227,7 @@ include("/ipc/chromium/chromium-config.mozbuild")
 FINAL_LIBRARY = "xul"
 
 LOCAL_INCLUDES += [
+    "!/security/manager/ssl/waict",
     "/dom/base",
     "/netwerk/base",
     "/netwerk/cookie",

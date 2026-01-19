@@ -3603,11 +3603,6 @@ criteria = "safe-to-deploy"
 delta = "0.1.32 -> 0.1.33"
 notes = "No unsafe added, only non-trivial change is switching to the getrandom crate on Windows."
 
-[[audits.json5]]
-who = "Anna Weine <anna.weine@mozilla.com>"
-criteria = "safe-to-deploy"
-version = "0.4.1"
-
 [[audits.keccak]]
 who = "Simon Friedberger <simon@mozilla.com>"
 criteria = "safe-to-deploy"
@@ -4752,31 +4747,6 @@ delta = "2.3.0 -> 2.3.1"
 who = "edgul <ed.guloien@gmail.com>"
 criteria = "safe-to-deploy"
 delta = "2.3.1 -> 2.3.2"
-
-[[audits.pest]]
-who = "Anna Weine <anna.weine@mozilla.com>"
-criteria = "safe-to-deploy"
-version = "2.8.5"
-
-[[audits.pest_derive]]
-who = "Anna Weine <anna.weine@mozilla.com>"
-criteria = "safe-to-deploy"
-version = "2.8.5"
-
-[[audits.pest_derive]]
-who = "Anna Weine <anna.weine@mozilla.com>"
-criteria = "safe-to-deploy"
-version = "2.8.5"
-
-[[audits.pest_generator]]
-who = "Anna Weine <anna.weine@mozilla.com>"
-criteria = "safe-to-deploy"
-version = "2.8.5"
-
-[[audits.pest_meta]]
-who = "Anna Weine <anna.weine@mozilla.com>"
-criteria = "safe-to-deploy"
-version = "2.8.5"
 
 [[audits.phf]]
 who = "Mike Hommey <mh+mozilla@glandium.org>"
@@ -8127,12 +8097,6 @@ criteria = "safe-to-deploy"
 user-id = 3618 # David Tolnay (dtolnay)
 start = "2024-05-13"
 end = "2026-12-11"
-
-[[trusted.ucd-trie]]
-criteria = "safe-to-deploy"
-user-id = 189 # Andrew Gallant (BurntSushi)
-start = "2019-07-21"
-end = "2027-01-12"
 
 [[trusted.unicode-ident]]
 criteria = "safe-to-deploy"
