@@ -50,6 +50,7 @@ WAICTManifestListener::OnStopRequest(nsIRequest* aRequest, nsresult aStatus) {
     } else {
       printf("=== Manifest validation failed with error code: %d\n",
              resultManifestValidate);
+      return NS_ERROR_FAILURE;
     }
 
     printf("✓ Manifest parsed successfully!\n\n");
@@ -64,12 +65,8 @@ WAICTManifestListener::OnStopRequest(nsIRequest* aRequest, nsresult aStatus) {
     );
 
     if (result != ManifestErrorCode::Success) {
-      // Well, I've just validated it above, so this shouldn't happen...
-      // but don't forget to put a nice error message!
-      return NS_OK;
+      return NS_ERROR_FAILURE;
     }
-
-
 
     printf("=== Manifest Fields ===\n");
     printf("Version: %u\n", parsed.version);
