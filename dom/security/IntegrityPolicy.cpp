@@ -309,11 +309,9 @@ bool IntegrityPolicy::CheckHash(nsIURI* aURI, const nsACString& aHash) {
   for (auto& entry : mWaictManifest.mHashes.Entries()) {
     nsCOMPtr<nsIURI> uri;
     NS_NewURI(getter_AddRefs(uri), entry.mKey, nullptr, mDocumentURI);
-    MOZ_DBG(uri);
 
     if (!uri) {
       printf("Failed to parse URL\n");
-      MOZ_DBG(entry.mKey);
       continue;
     }
 
@@ -350,21 +348,16 @@ nsresult IntegrityPolicy::ParseWaict(nsIURI* aDocumentURI, const nsACString& aHe
   nsCOMPtr<nsISFVItemOrInnerList> manifest;
   MOZ_TRY(dict->Get("manifest"_ns, getter_AddRefs(manifest)));
 
-  MOZ_DBG(manifest);
-
   nsCOMPtr<nsISFVItem> manifestItem = do_QueryInterface(manifest);
   if (!manifestItem) {
     return NS_ERROR_FAILURE;
   }
-
-  MOZ_DBG(manifestItem);
 
   nsCOMPtr<nsISFVBareItem> value;
   MOZ_TRY(manifestItem->GetValue(getter_AddRefs(value)));
 
   if (nsCOMPtr<nsISFVString> stringVal = do_QueryInterface(value)) {
     MOZ_TRY(stringVal->GetValue(mWaictManifestURL));
-    MOZ_DBG(mWaictManifestURL);
   }
 
   FetchWaictManifest();
@@ -389,24 +382,20 @@ NS_IMETHODIMP IntegrityPolicy::OnStreamComplete(nsIStreamLoader* aLoader,
     return NS_OK;
   }
 
-  MOZ_DBG(mWaictManifest.mVersion);
-  MOZ_DBG(mWaictManifest.mHashes.Entries().Length());
-
+  printf("> Got manifest, version=%d", mWaictManifest.mVersion);
   mWAICTPromise->Resolve(true, __func__);
-
   return NS_OK;
 }
 
 void IntegrityPolicy::FetchWaictManifest() {
-  printf("FetchWaictManifest: pid=%d\n", getpid());
+  printf("FetchWaictManifest: pid=%d mWaictManifestURL=%s\n", getpid(), mWaictManifestURL.get());
 
   mWAICTPromise = MakeRefPtr<WAICTManifestLoadedPromise::Private>(__func__);
 
   nsCOMPtr<nsIURI> uri;
   NS_NewURI(getter_AddRefs(uri), mWaictManifestURL, nullptr, mDocumentURI);
-  MOZ_DBG(uri);
-
   if (!uri) {
+    printf("> Could not parse manifest URL\n");
     return;
   }
 
@@ -418,7 +407,7 @@ void IntegrityPolicy::FetchWaictManifest() {
       nsContentUtils::GetSystemPrincipal(),
       nsILoadInfo::SEC_ALLOW_CROSS_ORIGIN_SEC_CONTEXT_IS_NULL,
       nsIContentPolicy::TYPE_OTHER);
-  printf("rv = %u\n", rv);
+  printf("> rv = %u\n", rv);
 }
 
 void IntegrityPolicy::PolicyContains(DestinationType aDestination,
