@@ -438,8 +438,6 @@ ScriptLoadHandler::OnStreamComplete(nsIIncrementalStreamLoader* aLoader,
     doc = node->OwnerDoc();
   }
 
-  // TODO!!!: Need to duplicate aData!
-
   if (doc) {
     if (auto* integrity = IntegrityPolicy::Cast(
             PolicyContainer::GetIntegrityPolicy(doc->GetPolicyContainer()))) {
