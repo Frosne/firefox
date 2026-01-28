@@ -19,8 +19,8 @@ void AssertSerializationForHeadersForIntegrityPolicy(
     const nsCString& aSerializedString) {
   // Test policy serialization
   RefPtr<IntegrityPolicy> policy;
-  IntegrityPolicy::ParseHeaders(aEnforcementHeader, aReportOnlyHeader,
-                                getter_AddRefs(policy));
+  IntegrityPolicy::ParseHeaders(aEnforcementHeader, aReportOnlyHeader, ""_ns,
+                                nullptr, getter_AddRefs(policy));
   ASSERT_TRUE(policy);
 
   nsCOMPtr<nsISerializable> serializable =
