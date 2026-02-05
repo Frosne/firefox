@@ -136,13 +136,39 @@ ScriptLoadHandler::~ScriptLoadHandler() = default;
 NS_IMPL_ISUPPORTS(ScriptLoadHandler, nsIIncrementalStreamLoaderObserver,
                   nsIChannelEventSink, nsIInterfaceRequestor)
 
+static IntegrityPolicy* GetIntegrityPolicy(nsIChannel* aChannel) {
+  nsCOMPtr<nsILoadInfo> loadInfo = aChannel->LoadInfo();
+  nsCOMPtr<nsISupports> loadingContext = loadInfo->GetLoadingContext();
+
+  RefPtr<Document> doc;
+  if (nsCOMPtr<nsINode> node = do_QueryInterface(loadingContext)) {
+    doc = node->OwnerDoc();
+  }
+  // TODO?
+
+  if (!doc) {
+    return nullptr;
+  }
+
+  return IntegrityPolicy::Cast(
+      PolicyContainer::GetIntegrityPolicy(doc->GetPolicyContainer()));
+}
+
 NS_IMETHODIMP
 ScriptLoadHandler::OnStartRequest(nsIRequest* aRequest) {
   mRequest->SetMinimumExpirationTime(
       nsContentUtils::GetSubresourceCacheExpirationTime(aRequest,
                                                         mRequest->URI()));
-  // TODO: Provide the OID of the hash algorithm instead of just SHA256.
-  mResourceHasher = mozilla::dom::ResourceHasher::Init(nsICryptoHash::SHA256);
+
+  // Only create a ResourceHasher when we need to enforce WAICT.
+  nsCOMPtr<nsIChannel> channel = do_QueryInterface(aRequest);
+  if (IntegrityPolicy* policy = GetIntegrityPolicy(channel)) {
+    if (policy->HasWaictFor(IntegrityPolicy::DestinationType::Script)) {
+      // TODO: Provide the OID of the hash algorithm instead of just SHA256.
+      mResourceHasher =
+          mozilla::dom::ResourceHasher::Init(nsICryptoHash::SHA256);
+    }
+  }
   return NS_OK;
 }
 
@@ -405,89 +431,75 @@ ScriptLoadHandler::OnStreamComplete(nsIIncrementalStreamLoader* aLoader,
   aLoader->GetRequest(getter_AddRefs(channelRequest));
   nsCOMPtr<nsIChannel> channel = do_QueryInterface(channelRequest);
 
-  nsCOMPtr<nsILoadInfo> loadInfo = channel->LoadInfo();
-  nsCOMPtr<nsISupports> loadingContext = loadInfo->GetLoadingContext();
+  if (!mResourceHasher) {
+    return DoOnStreamComplete(channel, aStatus, aDataLength, aData);
+  }
 
-  // IIUC this is the last chunk of data?
-  if (mResourceHasher) {
-    nsresult rv = mResourceHasher->Update(aData, aDataLength);
-    if (NS_FAILED(rv)) {
-      MOZ_LOG(gWaictLog, LogLevel::Error,
-              ("ScriptLoadHandler::OnStreamComplete -- "
-               "Failed to update resource hash\n"));
-      return DoOnStreamComplete(channel, NS_ERROR_FAILURE, aDataLength, aData);
-    }
-  } else {
-    MOZ_LOG(gWaictLog, LogLevel::Warning,
-            ("ScriptLoadHandler::OnStreamComplete -- "
-             "No resource hasher available to compute resource hash\n"));
+  nsresult rv = mResourceHasher->Update(aData, aDataLength);
+  if (NS_FAILED(rv)) {
+    MOZ_LOG(gWaictLog, LogLevel::Error,
+            ("ScriptLoadHandler::OnStreamComplete: Failed to update resource "
+             "hash\n"));
     return DoOnStreamComplete(channel, NS_ERROR_FAILURE, aDataLength, aData);
   }
 
   mResourceHasher->Finish();
   nsAutoCString computedHash(mResourceHasher->GetHash());
   if (computedHash.IsEmpty()) {
-    MOZ_LOG(gWaictLog, LogLevel::Error,
-            ("ScriptLoadHandler::OnStreamComplete -- "
-             "Failed to compute resource hash\n"));
+    MOZ_LOG_FMT(
+        gWaictLog, LogLevel::Error,
+        "ScriptLoadHandler::OnStreamComplete: Failed to compute resource hash");
     return DoOnStreamComplete(channel, NS_ERROR_FAILURE, aDataLength, aData);
   }
 
-  RefPtr<Document> doc;
-  if (nsCOMPtr<nsINode> node = do_QueryInterface(loadingContext)) {
-    doc = node->OwnerDoc();
+  RefPtr<IntegrityPolicy> integrity = GetIntegrityPolicy(channel);
+  if (!integrity) {
+    MOZ_LOG_FMT(
+        gWaictLog, LogLevel::Error,
+        "ScriptLoadHandler::OnStreamComplete: Could not get IntegrityPolicy");
+    return DoOnStreamComplete(channel, NS_ERROR_FAILURE, aDataLength, aData);
   }
 
-  if (doc) {
-    if (auto* integrity = IntegrityPolicy::Cast(
-            PolicyContainer::GetIntegrityPolicy(doc->GetPolicyContainer()))) {
-      if (integrity->HasWaictFor(IntegrityPolicy::DestinationType::Script)) {
-        printf("ScriptLoadHandler::OnStreamComplete: Waiting for load");
+  nsTArray<uint8_t> dataCopy;
+  if (!dataCopy.AppendElements(aData, aDataLength, fallible)) {
+    return DoOnStreamComplete(channel, NS_ERROR_OUT_OF_MEMORY, aDataLength,
+                              aData);
+  }
 
-        nsTArray<uint8_t> dataCopy;
-        if (!dataCopy.AppendElements(aData, aDataLength, fallible)) {
-          return DoOnStreamComplete(channel, NS_ERROR_OUT_OF_MEMORY,
-                                    aDataLength, aData);
+  integrity->WaitForManifestLoad()->Then(
+      GetCurrentSerialEventTarget(), __func__,
+      [self = RefPtr{this}, channel, integrity = RefPtr{integrity},
+       context = nsCOMPtr{aContext}, aStatus, dataCopy = std::move(dataCopy),
+       computedHash = nsCString(computedHash)](bool) {
+        MOZ_LOG_FMT(gWaictLog, LogLevel::Debug,
+                    "ScriptLoadHandler::OnStreamComplete: WaitForManifestLoad "
+                    "promise resolved");
+
+        // XXX Not clear if we want to use pre-redirect URL.
+        nsCOMPtr<nsIURI> originalURI;
+        channel->GetOriginalURI(getter_AddRefs(originalURI));
+        if (!integrity->CheckHash(originalURI, computedHash)) {
+          MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
+                      "ScriptLoadHandler::OnStreamComplete: Wrong script hash");
+          self->DoOnStreamComplete(channel, NS_ERROR_FAILURE, dataCopy.Length(),
+                                   dataCopy.Elements());
+          return;
         }
 
-        integrity->WaitForManifestLoad()->Then(
-            GetCurrentSerialEventTarget(), __func__,
-            [self = RefPtr{this}, channel, integrity = RefPtr{integrity},
-             context = nsCOMPtr{aContext}, aStatus,
-             dataCopy = std::move(dataCopy),
-             computedHash = nsCString(computedHash)](bool) {
-              printf("ScriptLoadHandler::OnStreamComplete: Promise resolved\n");
+        MOZ_LOG_FMT(
+            gWaictLog, LogLevel::Debug,
+            "ScriptLoadHandler::OnStreamComplete: Correct script hash :)");
+        self->DoOnStreamComplete(channel, aStatus, dataCopy.Length(),
+                                 dataCopy.Elements());
+      },
+      [self = RefPtr{this}, channel](bool) {
+        MOZ_LOG_FMT(gWaictLog, LogLevel::Error,
+                    "ScriptLoadHandler::OnStreamComplete: WaitForManifestLoad "
+                    "promise rejected");
+        self->DoOnStreamComplete(channel, NS_ERROR_FAILURE, 0, nullptr);
+      });
 
-              // XXX Not clear if we want to use pre-redirect URL.
-              nsCOMPtr<nsIURI> originalURI;
-              channel->GetOriginalURI(getter_AddRefs(originalURI));
-              if (!integrity->CheckHash(originalURI, computedHash)) {
-                printf("ScriptLoadHandler::OnStreamComplete: Wrong hash\n");
-
-                self->DoOnStreamComplete(channel, NS_ERROR_FAILURE,
-                                         dataCopy.Length(),
-                                         dataCopy.Elements());
-                return;
-              }
-
-              printf(
-                  "ScriptLoadHandler::OnStreamComplete: Correct hash \\o/\n");
-              self->DoOnStreamComplete(channel, aStatus, dataCopy.Length(),
-                                       dataCopy.Elements());
-            },
-            [self = RefPtr{this}, channel,
-             dataCopy = std::move(dataCopy)](bool) {
-              MOZ_LOG(gWaictLog, LogLevel::Error, ("Promise rejected\n"));
-              self->DoOnStreamComplete(channel, NS_ERROR_FAILURE,
-                                       dataCopy.Length(), dataCopy.Elements());
-            });
-
-        return NS_OK;
-      }
-    }
-  }
-
-  return DoOnStreamComplete(channel, aStatus, aDataLength, aData);
+  return NS_OK;
 }
 
 nsresult ScriptLoadHandler::DoOnStreamComplete(nsIChannel* aChannel,

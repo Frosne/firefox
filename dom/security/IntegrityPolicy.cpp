@@ -321,7 +321,8 @@ bool IntegrityPolicy::CheckHash(nsIURI* aURI, const nsACString& aHash) {
     NS_NewURI(getter_AddRefs(uri), entry.mKey, nullptr, mDocumentURI);
 
     if (!uri) {
-      MOZ_LOG_FMT(gWaictLog, LogLevel::Warning, "Failed to parse URL");
+      MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
+                  "IntegrityPolicy::CheckHash: Failed to parse URL");
       continue;
     }
 
@@ -332,15 +333,19 @@ bool IntegrityPolicy::CheckHash(nsIURI* aURI, const nsACString& aHash) {
     }
 
     if (NS_ConvertUTF16toUTF8(entry.mValue) != aHash) {
-      MOZ_LOG_FMT(gWaictLog, LogLevel::Warning, "Wrong hash");
+      MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
+                  "IntegrityPolicy::CheckHash: Wrong hash ({} != {})",
+                  NS_ConvertUTF16toUTF8(entry.mValue), nsCString(aHash));
       return false;
     }
 
-    MOZ_LOG_FMT(gWaictLog, LogLevel::Info, "Correct hash");
+    MOZ_LOG_FMT(gWaictLog, LogLevel::Info,
+                "IntegrityPolicy::CheckHash: Correct hash", aHash);
     return true;
   }
 
-  MOZ_LOG_FMT(gWaictLog, LogLevel::Debug, "URL not found");
+  MOZ_LOG_FMT(gWaictLog, LogLevel::Debug,
+              "IntegrityPolicy::CheckHash: URL not found");
   return false;
 }
 
