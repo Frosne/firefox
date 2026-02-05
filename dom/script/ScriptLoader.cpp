@@ -1803,6 +1803,13 @@ ScriptLoadRequest* ScriptLoader::LookupPreloadRequest(
     return nullptr;
   }
 
+  if (auto* integrity = IntegrityPolicy::Cast(
+            PolicyContainer::GetIntegrityPolicy(mDocument->GetPolicyContainer()))) {
+    if (integrity->HasWaictFor(IntegrityPolicy::DestinationType::Script)) {
+      return nullptr;
+    }
+  }
+
   // Found preloaded request. Note that a script-inserted script can steal a
   // preload!
   request->GetScriptLoadContext()->SetIsLoadRequest(aElement);

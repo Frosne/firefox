@@ -6,6 +6,7 @@
 
 #include "IntegrityPolicy.h"
 
+#include "WAICTLog.h"
 #include "WAICTUtils.h"
 #include "WAICTLog.h"
 #include "mozilla/Logging.h"
@@ -312,15 +313,17 @@ IntegrityPolicy::WaitForManifestLoad() {
 }
 
 bool IntegrityPolicy::CheckHash(nsIURI* aURI, const nsACString& aHash) {
-  printf("IntegrityPolicy::CheckHash aURI = %s aHash = %s\n",
-         aURI->GetSpecOrDefault().get(), nsCString(aHash).get());
+  MOZ_LOG_FMT(gWaictLog, LogLevel::Debug,
+              "IntegrityPolicy::CheckHash aURI = {} aHash = {}",
+              aURI->GetSpecOrDefault().get(), nsCString(aHash).get());
 
   for (auto& entry : mWaictManifest.mHashes.Entries()) {
     nsCOMPtr<nsIURI> uri;
     NS_NewURI(getter_AddRefs(uri), entry.mKey, nullptr, mDocumentURI);
 
     if (!uri) {
-      printf("Failed to parse URL\n");
+      MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
+                  "IntegrityPolicy::CheckHash: Failed to parse URL");
       continue;
     }
 
@@ -341,21 +344,28 @@ bool IntegrityPolicy::CheckHash(nsIURI* aURI, const nsACString& aHash) {
     }
 
     if (base64Part != aHash) {
-      printf("> Wrong hash\n");
-      printf("Expected hash = %s\n", base64Part.get());
+      MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
+                  "IntegrityPolicy::CheckHash: Wrong hash ({} != {})",
+                  NS_ConvertUTF16toUTF8(entry.mValue), nsCString(aHash));
       return false;
     }
 
-    printf("> Correct hash!!!\n");
+    MOZ_LOG_FMT(gWaictLog, LogLevel::Info,
+                "IntegrityPolicy::CheckHash: Correct hash", aHash);
     return true;
   }
 
-  printf("> URL not found\n");
+  MOZ_LOG_FMT(gWaictLog, LogLevel::Debug,
+              "IntegrityPolicy::CheckHash: URL not found");
   return false;
 }
 
 nsresult IntegrityPolicy::ParseWaict(nsIURI* aDocumentURI,
                                      const nsACString& aHeader) {
+  if (aHeader.IsEmpty()) {
+    return NS_OK;
+  }
+
   mDocumentURI = aDocumentURI;
 
   nsCOMPtr<nsISFVService> sfv = net::GetSFVService();
@@ -364,13 +374,27 @@ nsresult IntegrityPolicy::ParseWaict(nsIURI* aDocumentURI,
   }
 
   nsCOMPtr<nsISFVDictionary> dict;
-  MOZ_TRY(sfv->ParseDictionary(aHeader, getter_AddRefs(dict)));
-
-  MOZ_TRY(waict::ParseManifest(dict, mWaictManifestURL));
+  nsresult rv = sfv->ParseDictionary(aHeader, getter_AddRefs(dict));
+  if (NS_FAILED(rv)) {
+    MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
+                "ParseWaict: ParseDictionary failed");
+    return rv;
+  }
 
   auto destinationsResult = ParseDestinations(dict, /* aIsWAICT */ true);
-  if (destinationsResult.isOk()) {
-    mWaictDestinations = destinationsResult.unwrap();
+  if (destinationsResult.isErr()) {
+    MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
+                "ParseWaict: ParseDestinations failed");
+    return destinationsResult.unwrapErr();
+  }
+
+  mWaictDestinations = destinationsResult.unwrap();
+
+  rv = waict::ParseManifest(dict, mWaictManifestURL);
+  if (NS_FAILED(rv)) {
+    MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
+                "ParseWaict: waict::ParseManifest failed");
+    return rv;
   }
 
   FetchWaictManifest();
@@ -485,7 +509,8 @@ NS_IMETHODIMP IntegrityPolicy::OnStreamComplete(nsIStreamLoader* aLoader,
                                                 nsresult aStatus,
                                                 uint32_t aDataLen,
                                                 const uint8_t* aData) {
-  printf("IntegrityPolicy::OnStreamComplete: dataLen = %u\n", aDataLen);
+  MOZ_LOG_FMT(gWaictLog, LogLevel::Debug,
+              "IntegrityPolicy::OnStreamComplete: dataLen = {}", aDataLen);
 
   if (NS_FAILED(aStatus)) {
     return NS_OK;
@@ -495,42 +520,51 @@ NS_IMETHODIMP IntegrityPolicy::OnStreamComplete(nsIStreamLoader* aLoader,
   nsDependentCSubstring data(reinterpret_cast<const char*>(aData), aDataLen);
   ManifestValidationStatus status = ValidateManifest(data, mWaictManifest);
   if (status != ManifestValidationStatus::OK) {
-    MOZ_LOG(gWaictLog, LogLevel::Warning,
+    MOZ_LOG_FMT(gWaictLog, LogLevel::Error,
             ("Failed to validate WAICT manifest, error=%u",
              static_cast<uint8_t>(status)));
     mWAICTPromise->Reject(false, __func__);
     return NS_OK;
   } else {
-    MOZ_LOG(gWaictLog, LogLevel::Warning, ("Manifest Validation success"));
+    MOZ_LOG_FMT(gWaictLog, LogLevel::Debug, ("Manifest Validation success"));
   }
 
-  printf("> Got manifest, version=%d", mWaictManifest.mVersion);
+  MOZ_LOG_FMT(gWaictLog, LogLevel::Info, "Got manifest, version={}",
+              mWaictManifest.mVersion);
   mWAICTPromise->Resolve(true, __func__);
   return NS_OK;
 }
 
 void IntegrityPolicy::FetchWaictManifest() {
-  printf("FetchWaictManifest: pid=%d mWaictManifestURL=%s\n", getpid(),
-         mWaictManifestURL.get());
+  MOZ_LOG_FMT(gWaictLog, LogLevel::Debug,
+              "FetchWaictManifest: mWaictManifestURL={}",
+              mWaictManifestURL.get());
 
   mWAICTPromise = MakeRefPtr<WAICTManifestLoadedPromise::Private>(__func__);
 
   nsCOMPtr<nsIURI> uri;
-  NS_NewURI(getter_AddRefs(uri), mWaictManifestURL, nullptr, mDocumentURI);
-  if (!uri) {
-    printf("> Could not parse manifest URL\n");
+  nsresult rv =
+      NS_NewURI(getter_AddRefs(uri), mWaictManifestURL, nullptr, mDocumentURI);
+  if (NS_FAILED(rv)) {
+    MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
+                "Could not parse manifest URL: rv={}",
+                static_cast<uint32_t>(rv));
+    mWAICTPromise->Reject(true, __func__);
     return;
   }
 
   nsCOMPtr<nsIStreamLoader> loader;
   // XXX use right flags.
-  nsresult rv = NS_NewStreamLoader(
-      getter_AddRefs(loader), uri,
-      this,  // aObserver
-      nsContentUtils::GetSystemPrincipal(),
+  rv = NS_NewStreamLoader(
+      getter_AddRefs(loader), uri, this, nsContentUtils::GetSystemPrincipal(),
       nsILoadInfo::SEC_ALLOW_CROSS_ORIGIN_SEC_CONTEXT_IS_NULL,
       nsIContentPolicy::TYPE_OTHER);
-  printf("> rv = %u\n", rv);
+  if (NS_FAILED(rv)) {
+    MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
+                "Could not fetch manifest URL: rv = {}",
+                static_cast<uint32_t>(rv));
+    mWAICTPromise->Reject(true, __func__);
+  }
 }
 
 void IntegrityPolicy::PolicyContains(DestinationType aDestination,
