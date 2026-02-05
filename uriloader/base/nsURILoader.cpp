@@ -47,8 +47,6 @@
 #include "mozilla/StaticPrefs_browser.h"
 #include "mozilla/StaticPrefs_dom.h"
 #include "mozilla/StaticPrefs_general.h"
-#include "mozilla/dom/IntegrityPolicy.h"
-#include "mozilla/dom/PolicyContainer.h"
 #include "nsContentUtils.h"
 #include "imgLoader.h"
 
@@ -105,9 +103,6 @@ NS_IMETHODIMP nsDocumentOpenInfo::OnStartRequest(nsIRequest* request) {
   if (!request) {
     return NS_ERROR_UNEXPECTED;
   }
-
-  // Initialize the hasher for resource integrity verification.
-  mResourceHasher = mozilla::dom::ResourceHasher::Init(nsICryptoHash::SHA256);
 
   nsresult rv = NS_OK;
 
@@ -225,31 +220,6 @@ nsDocumentOpenInfo::OnDataAvailable(nsIRequest* request, nsIInputStream* inStr,
   // if we have retarged to the end stream listener, then forward the call....
   // otherwise, don't do anything
 
-  printf("[%u] nsDocumentOpenInfo::OnDataAvailable\n", getpid());
-
-  if (inStr && mResourceHasher) {
-    nsAutoCString buffer;
-    buffer.SetLength(count);
-    uint32_t bytesRead = 0;
-
-    nsCOMPtr<nsICloneableInputStream> cloneable = do_QueryInterface(inStr);
-    if (cloneable && cloneable->GetCloneable()) {
-      nsCOMPtr<nsIInputStream> cloneInStrForHash;
-      cloneable->Clone(getter_AddRefs(cloneInStrForHash));
-
-      if (cloneInStrForHash) {
-        nsresult rv =
-            cloneInStrForHash->Read(buffer.BeginWriting(), count, &bytesRead);
-        if (NS_SUCCEEDED(rv) && bytesRead > 0) {
-          // Just call Update - logging happens inside
-          mResourceHasher->Update(
-              reinterpret_cast<const uint8_t*>(buffer.BeginReading()),
-              bytesRead);
-        }
-      }
-    }
-  }
-
   mReceivedData = true;
   nsresult rv = NS_OK;
 
@@ -331,58 +301,6 @@ NS_IMETHODIMP nsDocumentOpenInfo::OnStopRequest(nsIRequest* request,
     aStatus = rv;
   }
 
-  if (nsCOMPtr<nsIChannel> channel = do_QueryInterface(request)) {
-    printf("nsDocumentOpenInfo::OnStopRequest\n");
-
-    nsAutoCString computedHash;
-    if (mResourceHasher) {
-      mResourceHasher->Finish();
-      computedHash = mResourceHasher->GetHash();
-    }
-
-    RefPtr<Document> doc(do_GetInterface(m_originalContext));
-    if (doc) {
-      if (auto* integrity = dom::IntegrityPolicy::Cast(
-              PolicyContainer::GetIntegrityPolicy(doc->GetPolicyContainer()))) {
-        if (integrity->HasWaict()) {
-          printf("> Waiting for manifest\n");
-          integrity->WaitForManifestLoad()->Then(
-              GetCurrentSerialEventTarget(), __func__,
-              [channel, doc, integrity = RefPtr{integrity},
-               request = nsCOMPtr{request},
-               listener = nsCOMPtr{m_targetStreamListener}, aStatus,
-               computedHash](bool) {
-                printf("nsDocumentOpenInfo::OnStopRequest: Promise resolved\n");
-                nsCOMPtr<nsIURI> originalURI;
-                channel->GetOriginalURI(getter_AddRefs(originalURI));
-                if (!integrity->CheckHash(originalURI, computedHash)) {
-                  printf("nsDocumentOpenInfo::OnStopRequest: Wrong hash\n");
-
-                  if (listener) {
-                    listener->OnStopRequest(request,
-                                            NS_ERROR_NET_EMPTY_RESPONSE);
-                  }
-
-                  bool result;
-                  doc->GetDocShell()->DisplayLoadError(
-                      NS_ERROR_BLOCKED_BY_POLICY, originalURI, nullptr, nullptr,
-                      &result);
-                  return;
-                }
-
-                listener->OnStopRequest(request, aStatus);
-              },
-              [](bool) {});
-
-          m_targetStreamListener = nullptr;
-          mContentType.Truncate();
-          mUsedContentHandler = false;
-          return NS_OK;
-        }
-      }
-    }
-  }
-
   if (m_targetStreamListener) {
     nsCOMPtr<nsIStreamListener> listener(m_targetStreamListener);
 
@@ -392,7 +310,6 @@ NS_IMETHODIMP nsDocumentOpenInfo::OnStopRequest(nsIRequest* request,
     mContentType.Truncate();
     listener->OnStopRequest(request, aStatus);
   }
-
   mUsedContentHandler = false;
 
   // Remember...
