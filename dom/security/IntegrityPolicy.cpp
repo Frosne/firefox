@@ -346,6 +346,10 @@ bool IntegrityPolicy::CheckHash(nsIURI* aURI, const nsACString& aHash) {
 
 nsresult IntegrityPolicy::ParseWaict(nsIURI* aDocumentURI,
                                      const nsACString& aHeader) {
+  if (aHeader.IsEmpty()) {
+    return NS_OK;
+  }
+
   mDocumentURI = aDocumentURI;
 
   nsCOMPtr<nsISFVService> sfv = net::GetSFVService();
@@ -354,13 +358,27 @@ nsresult IntegrityPolicy::ParseWaict(nsIURI* aDocumentURI,
   }
 
   nsCOMPtr<nsISFVDictionary> dict;
-  MOZ_TRY(sfv->ParseDictionary(aHeader, getter_AddRefs(dict)));
-
-  MOZ_TRY(waict::ParseManifest(dict, mWaictManifestURL));
+  nsresult rv = sfv->ParseDictionary(aHeader, getter_AddRefs(dict));
+  if (NS_FAILED(rv)) {
+    MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
+                "ParseWaict: ParseDictionary failed");
+    return rv;
+  }
 
   auto destinationsResult = ParseDestinations(dict, /* aIsWAICT */ true);
-  if (destinationsResult.isOk()) {
-    mWaictDestinations = destinationsResult.unwrap();
+  if (destinationsResult.isErr()) {
+    MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
+                "ParseWaict: ParseDestinations failed");
+    return destinationsResult.unwrapErr();
+  }
+
+  mWaictDestinations = destinationsResult.unwrap();
+
+  rv = waict::ParseManifest(dict, mWaictManifestURL);
+  if (NS_FAILED(rv)) {
+    MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
+                "ParseWaict: waict::ParseManifest failed");
+    return rv;
   }
 
   FetchWaictManifest();
@@ -394,27 +412,34 @@ NS_IMETHODIMP IntegrityPolicy::OnStreamComplete(nsIStreamLoader* aLoader,
 
 void IntegrityPolicy::FetchWaictManifest() {
   MOZ_LOG_FMT(gWaictLog, LogLevel::Debug,
-              "FetchWaictManifest: pid={} mWaictManifestURL={}", getpid(),
+              "FetchWaictManifest: mWaictManifestURL={}",
               mWaictManifestURL.get());
 
   mWAICTPromise = MakeRefPtr<WAICTManifestLoadedPromise::Private>(__func__);
 
   nsCOMPtr<nsIURI> uri;
-  NS_NewURI(getter_AddRefs(uri), mWaictManifestURL, nullptr, mDocumentURI);
-  if (!uri) {
-    MOZ_LOG_FMT(gWaictLog, LogLevel::Warning, "Could not parse manifest URL");
+  nsresult rv =
+      NS_NewURI(getter_AddRefs(uri), mWaictManifestURL, nullptr, mDocumentURI);
+  if (NS_FAILED(rv)) {
+    MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
+                "Could not parse manifest URL: rv={}",
+                static_cast<uint32_t>(rv));
+    mWAICTPromise->Reject(true, __func__);
     return;
   }
 
   nsCOMPtr<nsIStreamLoader> loader;
   // XXX use right flags.
-  nsresult rv = NS_NewStreamLoader(
-      getter_AddRefs(loader), uri,
-      this,  // aObserver
-      nsContentUtils::GetSystemPrincipal(),
+  rv = NS_NewStreamLoader(
+      getter_AddRefs(loader), uri, this, nsContentUtils::GetSystemPrincipal(),
       nsILoadInfo::SEC_ALLOW_CROSS_ORIGIN_SEC_CONTEXT_IS_NULL,
       nsIContentPolicy::TYPE_OTHER);
-  MOZ_LOG_FMT(gWaictLog, LogLevel::Debug, "rv = {}", static_cast<uint32_t>(rv));
+  if (NS_FAILED(rv)) {
+    MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
+                "Could not fetch manifest URL: rv = {}",
+                static_cast<uint32_t>(rv));
+    mWAICTPromise->Reject(true, __func__);
+  }
 }
 
 void IntegrityPolicy::PolicyContains(DestinationType aDestination,
