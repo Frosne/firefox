@@ -3077,7 +3077,7 @@ ProxyListener::OnStopRequest(nsIRequest* aRequest, nsresult status) {
     if (doc) {
       if (auto* integrity = IntegrityPolicy::Cast(
               PolicyContainer::GetIntegrityPolicy(doc->GetPolicyContainer()))) {
-        if (integrity->HasWaict()) {
+        if (integrity->HasWaictFor(IntegrityPolicy::DestinationType::Image)) {
           printf("ProxyListener::OnStopRequest: Waiting for load");
           integrity->WaitForManifestLoad()->Then(
               GetCurrentSerialEventTarget(), __func__,
