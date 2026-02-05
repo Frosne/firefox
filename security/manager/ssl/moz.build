@@ -76,6 +76,7 @@ EXPORTS += [
     "SharedCertVerifier.h",
     "SSLServerCertVerification.h",
     "TransportSecurityInfo.h",
+    "WAICTUtils.h",
 ]
 
 EXPORTS.mozilla += [
@@ -146,6 +147,7 @@ UNIFIED_SOURCES += [
     "TransportSecurityInfo.cpp",
     "VerifySSLServerCertChild.cpp",
     "VerifySSLServerCertParent.cpp",
+    "WAICTUtils.cpp",
     "X509CertValidity.cpp",
 ]
 

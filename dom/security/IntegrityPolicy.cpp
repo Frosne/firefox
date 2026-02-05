@@ -6,6 +6,7 @@
 
 #include "IntegrityPolicy.h"
 
+#include "WAICTUtils.h"
 #include "mozilla/Logging.h"
 #include "mozilla/StaticPrefs_security.h"
 #include "mozilla/dom/RequestBinding.h"
@@ -345,20 +346,7 @@ nsresult IntegrityPolicy::ParseWaict(nsIURI* aDocumentURI, const nsACString& aHe
   nsCOMPtr<nsISFVDictionary> dict;
   MOZ_TRY(sfv->ParseDictionary(aHeader, getter_AddRefs(dict)));
 
-  nsCOMPtr<nsISFVItemOrInnerList> manifest;
-  MOZ_TRY(dict->Get("manifest"_ns, getter_AddRefs(manifest)));
-
-  nsCOMPtr<nsISFVItem> manifestItem = do_QueryInterface(manifest);
-  if (!manifestItem) {
-    return NS_ERROR_FAILURE;
-  }
-
-  nsCOMPtr<nsISFVBareItem> value;
-  MOZ_TRY(manifestItem->GetValue(getter_AddRefs(value)));
-
-  if (nsCOMPtr<nsISFVString> stringVal = do_QueryInterface(value)) {
-    MOZ_TRY(stringVal->GetValue(mWaictManifestURL));
-  }
+  MOZ_TRY(waict::ParseManifest(dict, mWaictManifestURL));
 
   FetchWaictManifest();
   return NS_OK;

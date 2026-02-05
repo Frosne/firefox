@@ -4,6 +4,7 @@
 
 #include "SiteIntegrityService.h"
 
+#include "WAICTUtils.h"
 #include "mozilla/Logging.h"
 #include "mozilla/net/SFVService.h"
 #include "nsIDataStorage.h"
@@ -82,43 +83,6 @@ SiteIntegrityService::ProcessHeader(nsIURI* aSourceURI,
   return NS_OK;
 }
 
-static nsresult ParseMaxAge(nsISFVDictionary* aDict, uint64_t* outMaxAge) {
-  nsCOMPtr<nsISFVItemOrInnerList> maxAge;
-  MOZ_TRY(aDict->Get("max-age"_ns, getter_AddRefs(maxAge)));
-  if (nsCOMPtr<nsISFVItem> maxAgeItem = do_QueryInterface(maxAge)) {
-    nsCOMPtr<nsISFVBareItem> maxAgeValue;
-    MOZ_TRY(maxAgeItem->GetValue(getter_AddRefs(maxAgeValue)));
-    if (nsCOMPtr<nsISFVInteger> intVal = do_QueryInterface(maxAgeValue)) {
-      int64_t maxAgeSeconds;
-      MOZ_TRY(intVal->GetValue(&maxAgeSeconds));
-      if (maxAgeSeconds >= 0) {
-        *outMaxAge = maxAgeSeconds;
-        return NS_OK;
-      }
-    }
-  }
-
-  return NS_ERROR_FAILURE;
-}
-
-static nsresult ParseManifest(nsISFVDictionary* aDict,
-                              nsACString& outManifest) {
-  nsCOMPtr<nsISFVItemOrInnerList> manifest;
-  MOZ_TRY(aDict->Get("manifest"_ns, getter_AddRefs(manifest)));
-  if (nsCOMPtr<nsISFVItem> manifestItem = do_QueryInterface(manifest)) {
-    nsCOMPtr<nsISFVBareItem> value;
-    MOZ_TRY(manifestItem->GetValue(getter_AddRefs(value)));
-    if (nsCOMPtr<nsISFVString> stringVal = do_QueryInterface(value)) {
-      MOZ_TRY(stringVal->GetValue(outManifest));
-      if (!outManifest.IsEmpty()) {
-        return NS_OK;
-      }
-    }
-  }
-
-  return NS_ERROR_FAILURE;
-}
-
 nsresult SiteIntegrityService::ParseHeader(const nsACString& aHeader,
                                            uint64_t* outMaxAge) {
   nsCOMPtr<nsISFVService> sfv = net::GetSFVService();
@@ -128,11 +92,11 @@ nsresult SiteIntegrityService::ParseHeader(const nsACString& aHeader,
   MOZ_TRY(sfv->ParseDictionary(aHeader, getter_AddRefs(dict)));
 
   uint64_t maxAge;
-  MOZ_TRY(ParseMaxAge(dict, &maxAge));
+  MOZ_TRY(waict::ParseMaxAge(dict, &maxAge));
   MOZ_LOG_FMT(gSiteIntegrityLog, LogLevel::Debug, "max-age: {}", maxAge);
 
   nsAutoCString manifest;
-  MOZ_TRY(ParseManifest(dict, manifest));
+  MOZ_TRY(waict::ParseManifest(dict, manifest));
   MOZ_LOG_FMT(gSiteIntegrityLog, LogLevel::Debug, "Manifest URL: {}", manifest);
 
   *outMaxAge = maxAge;
