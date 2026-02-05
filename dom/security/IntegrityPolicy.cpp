@@ -513,6 +513,7 @@ NS_IMETHODIMP IntegrityPolicy::OnStreamComplete(nsIStreamLoader* aLoader,
               "IntegrityPolicy::OnStreamComplete: dataLen = {}", aDataLen);
 
   if (NS_FAILED(aStatus)) {
+    mWAICTPromise->Reject(false, __func__);
     return NS_OK;
   }
 
@@ -520,9 +521,9 @@ NS_IMETHODIMP IntegrityPolicy::OnStreamComplete(nsIStreamLoader* aLoader,
   nsDependentCSubstring data(reinterpret_cast<const char*>(aData), aDataLen);
   ManifestValidationStatus status = ValidateManifest(data, mWaictManifest);
   if (status != ManifestValidationStatus::OK) {
-    MOZ_LOG_FMT(gWaictLog, LogLevel::Error,
-            ("Failed to validate WAICT manifest, error=%u",
-             static_cast<uint8_t>(status)));
+    MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
+            "Failed to validate WAICT manifest, error= {}",
+            static_cast<uint8_t>(status));
     mWAICTPromise->Reject(false, __func__);
     return NS_OK;
   } else {
