@@ -47,7 +47,7 @@ class IntegrityPolicy : public nsIIntegrityPolicy,
   enum class SourceType : uint8_t { Inline };
 
   // Trimmed down version of dom::RequestDestination
-  enum class DestinationType : uint8_t { Script, Style };
+  enum class DestinationType : uint8_t { Script, Style, Image };
 
   using Sources = EnumSet<SourceType>;
   using Destinations = EnumSet<DestinationType>;
@@ -76,7 +76,7 @@ class IntegrityPolicy : public nsIIntegrityPolicy,
   static bool Equals(const IntegrityPolicy* aPolicy,
                      const IntegrityPolicy* aOtherPolicy);
 
-  bool HasWaict() const { return !mWaictManifestURL.IsEmpty(); }
+  bool HasWaictFor(DestinationType aDestination);
 
   using WAICTManifestLoadedPromise =
       MozPromise<bool, bool, /* IsExclusive */ false>;
@@ -121,6 +121,7 @@ class IntegrityPolicy : public nsIIntegrityPolicy,
   nsCString mWaictManifestURL;
   // XXX We should not use this directly.
   WAICTMAnifest mWaictManifest;
+  Destinations mWaictDestinations;
   RefPtr<WAICTManifestLoadedPromise::Private> mWAICTPromise;
 };
 }  // namespace dom
@@ -134,7 +135,7 @@ struct MaxEnumValue<dom::IntegrityPolicy::SourceType> {
 template <>
 struct MaxEnumValue<dom::IntegrityPolicy::DestinationType> {
   static constexpr unsigned int value =
-      static_cast<unsigned int>(dom::IntegrityPolicy::DestinationType::Script);
+      static_cast<unsigned int>(dom::IntegrityPolicy::DestinationType::Image);
 };
 
 }  // namespace mozilla

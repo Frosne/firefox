@@ -441,7 +441,7 @@ ScriptLoadHandler::OnStreamComplete(nsIIncrementalStreamLoader* aLoader,
   if (doc) {
     if (auto* integrity = IntegrityPolicy::Cast(
             PolicyContainer::GetIntegrityPolicy(doc->GetPolicyContainer()))) {
-      if (integrity->HasWaict()) {
+      if (integrity->HasWaictFor(IntegrityPolicy::DestinationType::Script)) {
         printf("ScriptLoadHandler::OnStreamComplete: Waiting for load");
 
         nsTArray<uint8_t> dataCopy;

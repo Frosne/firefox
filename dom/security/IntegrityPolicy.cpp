@@ -148,7 +148,7 @@ Result<IntegrityPolicy::Sources, nsresult> ParseSources(
 
 /* static */
 Result<IntegrityPolicy::Destinations, nsresult> ParseDestinations(
-    nsISFVDictionary* aDict) {
+    nsISFVDictionary* aDict, bool aIsWAICT) {
   // blocked destinations, a list of destinations, initially empty.
 
   nsCOMPtr<nsISFVItemOrInnerList> iil;
@@ -173,6 +173,8 @@ Result<IntegrityPolicy::Destinations, nsresult> ParseDestinations(
       if (StaticPrefs::security_integrity_policy_stylesheet_enabled()) {
         result += IntegrityPolicy::DestinationType::Style;
       }
+    } else if (aIsWAICT && destination.EqualsLiteral("image")) {
+      result += IntegrityPolicy::DestinationType::Image;
     } else {
       LOG("ParseDestinations: Unknown destination: {}", destination.get());
       // Unknown destination, we don't know how to handle it
@@ -254,7 +256,7 @@ nsresult IntegrityPolicy::ParseHeaders(const nsACString& aHeader,
     }
 
     // 4. If dictionary["blocked-destinations"] exists:
-    auto destinationsResult = ParseDestinations(dict);
+    auto destinationsResult = ParseDestinations(dict, /* aIsWAICT */ false);
     if (destinationsResult.isErr()) {
       LOG("[{}] Failed to parse destinations for {} header.",
           static_cast<void*>(policy),
@@ -297,9 +299,14 @@ nsresult IntegrityPolicy::ParseHeaders(const nsACString& aHeader,
   return NS_OK;
 }
 
+bool IntegrityPolicy::HasWaictFor(DestinationType aDestination) {
+  return !mWaictManifestURL.IsEmpty() &&
+         mWaictDestinations.contains(aDestination);
+}
+
 RefPtr<IntegrityPolicy::WAICTManifestLoadedPromise>
 IntegrityPolicy::WaitForManifestLoad() {
-  MOZ_ASSERT(HasWaict());
+  MOZ_ASSERT(!mWaictManifestURL.IsEmpty());
   return mWAICTPromise;
 }
 
@@ -347,6 +354,11 @@ nsresult IntegrityPolicy::ParseWaict(nsIURI* aDocumentURI, const nsACString& aHe
   MOZ_TRY(sfv->ParseDictionary(aHeader, getter_AddRefs(dict)));
 
   MOZ_TRY(waict::ParseManifest(dict, mWaictManifestURL));
+
+  auto destinationsResult = ParseDestinations(dict, /* aIsWAICT */ true);
+  if (destinationsResult.isOk()) {
+    mWaictDestinations = destinationsResult.unwrap();
+  }
 
   FetchWaictManifest();
   return NS_OK;
