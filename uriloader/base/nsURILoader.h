@@ -17,7 +17,6 @@
 #include "nsIStreamListener.h"
 #include "nsIThreadRetargetableStreamListener.h"
 #include "nsIExternalHelperAppService.h"
-#include "mozilla/dom/ResourceHasher.h"
 
 #include "mozilla/Logging.h"
 
@@ -225,9 +224,6 @@ class nsDocumentOpenInfo : public nsIThreadRetargetableStreamListener {
    * header and an empty body.
    */
   bool mReceivedData = false;
-
-  // Hasher for resource integrity verification.
-  RefPtr<mozilla::dom::ResourceHasher> mResourceHasher;
 };
 
 #endif /* nsURILoader_h_ */
