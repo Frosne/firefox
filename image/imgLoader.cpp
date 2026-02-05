@@ -3034,8 +3034,6 @@ ProxyListener::OnStopRequest(nsIRequest* aRequest, nsresult status) {
     return NS_ERROR_FAILURE;
   }
 
-  printf("ProxyListener::OnStopRequest\n");
-
   if (nsCOMPtr<nsIChannel> channel = do_QueryInterface(aRequest)) {
     nsCOMPtr<nsILoadInfo> loadInfo = channel->LoadInfo();
     nsCOMPtr<nsISupports> loadingContext = loadInfo->GetLoadingContext();
