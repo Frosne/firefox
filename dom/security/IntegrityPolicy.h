@@ -40,8 +40,7 @@ class IntegrityPolicy : public nsIIntegrityPolicy,
 
   static nsresult ParseHeaders(const nsACString& aHeader,
                                const nsACString& aHeaderRO,
-                               const nsACString& aWaict,
-                               nsIURI* aDocumentURI,
+                               const nsACString& aWaict, nsIURI* aDocumentURI,
                                IntegrityPolicy** aPolicy);
 
   enum class SourceType : uint8_t { Inline };
@@ -84,6 +83,18 @@ class IntegrityPolicy : public nsIIntegrityPolicy,
 
   bool CheckHash(nsIURI* aURI, const nsACString& aHash);
 
+  enum class ManifestValidationStatus : uint8_t {
+    OK,
+    InvalidJSON,
+    MissingVersion,
+    InvalidVersion,
+    MissingHashes,
+    InvalidHashFormat
+  };
+
+  static ManifestValidationStatus ValidateManifest(
+      const nsACString& aManifestJSON, WAICTManifest& aOutManifest);
+
  protected:
   virtual ~IntegrityPolicy();
 
@@ -124,6 +135,7 @@ class IntegrityPolicy : public nsIIntegrityPolicy,
   Destinations mWaictDestinations;
   RefPtr<WAICTManifestLoadedPromise::Private> mWAICTPromise;
 };
+
 }  // namespace dom
 
 template <>
