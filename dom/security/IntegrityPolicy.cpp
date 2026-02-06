@@ -317,7 +317,13 @@ bool IntegrityPolicy::CheckHash(nsIURI* aURI, const nsACString& aHash) {
               "IntegrityPolicy::CheckHash aURI = {} aHash = {}",
               aURI->GetSpecOrDefault().get(), nsCString(aHash).get());
 
-  for (auto& entry : mWaictManifest.mHashes.Entries()) {
+  if (!mWaictManifest.mHashes.WasPassed()) {
+    MOZ_LOG_FMT(gWaictLog, LogLevel::Debug,
+                "IntegrityPolicy::CheckHash: No hashes in manifest");
+    return false;
+  }
+
+  for (auto& entry : mWaictManifest.mHashes.Value().Entries()) {
     nsCOMPtr<nsIURI> uri;
     NS_NewURI(getter_AddRefs(uri), entry.mKey, nullptr, mDocumentURI);
 
@@ -401,14 +407,6 @@ nsresult IntegrityPolicy::ParseWaict(nsIURI* aDocumentURI,
   return NS_OK;
 }
 
-enum class ManifestValidationStatus : uint8_t {
-  OK,
-  InvalidJSON,
-  MissingVersion,
-  InvalidVersion,
-  InvalidHashFormat
-};
-
 // It's probably already exists somewhere in Firefox
 bool IsValidBase64(const nsACString& aBase64) {
   if (aBase64.IsEmpty()) {
@@ -481,7 +479,18 @@ bool ValidateHashes(const Record<nsString, nsString>& aHashes) {
   return true;
 }
 
-ManifestValidationStatus ValidateManifest(const nsACString& aManifestJSON,
+bool ValidateAnyHashes(const Sequence<nsString>& aAnyHashes) {
+  for (const auto& hash : aAnyHashes) {
+    if (hash.IsEmpty() || !ValidateHashValue(hash)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+IntegrityPolicy::ManifestValidationStatus
+IntegrityPolicy::ValidateManifest(const nsACString& aManifestJSON,
                                           WAICTManifest& aOutManifest) {
   if (!aOutManifest.Init(NS_ConvertUTF8toUTF16(aManifestJSON))) {
     return ManifestValidationStatus::InvalidJSON;
@@ -492,12 +501,26 @@ ManifestValidationStatus ValidateManifest(const nsACString& aManifestJSON,
     return ManifestValidationStatus::InvalidVersion;
   }
 
-  // Could integrity policy be empty?
-  // if (aOutManifest.mIntegrityPolicy.IsEmpty()) {
-  //   return ManifestValidationStatus::MissingIntegrityPolicy;
-  // }
+  // Note: Duplicate keys in the hashes record are impossible - the JSON parser
+  // and record<> type automatically keep only the last value for duplicate keys.
 
-  if (!ValidateHashes(aOutManifest.mHashes)) {
+  // At least one of hashes or any_hashes must be present and non-empty
+  bool hasHashes = aOutManifest.mHashes.WasPassed() &&
+                   !aOutManifest.mHashes.Value().Entries().IsEmpty();
+  bool hasAnyHashes = aOutManifest.mAny_hashes.WasPassed() &&
+                      !aOutManifest.mAny_hashes.Value().IsEmpty();
+
+  if (!hasHashes && !hasAnyHashes) {
+    return ManifestValidationStatus::MissingHashes;
+  }
+
+  // Validate hashes if present
+  if (hasHashes && !ValidateHashes(aOutManifest.mHashes.Value())) {
+    return ManifestValidationStatus::InvalidHashFormat;
+  }
+
+  // Validate any_hashes if present
+  if (hasAnyHashes && !ValidateAnyHashes(aOutManifest.mAny_hashes.Value())) {
     return ManifestValidationStatus::InvalidHashFormat;
   }
 
