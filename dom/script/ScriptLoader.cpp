@@ -53,6 +53,7 @@
 #include "mozilla/dom/DocumentInlines.h"  // Document::GetPresContext
 #include "mozilla/dom/Element.h"
 #include "mozilla/dom/FetchPriority.h"
+#include "mozilla/dom/IntegrityPolicy.h"
 #include "mozilla/dom/JSExecutionUtils.h"  // mozilla::dom::Compile, mozilla::dom::InstantiateStencil, mozilla::dom::EvaluationExceptionToNSResult
 #include "mozilla/dom/PolicyContainer.h"
 #include "mozilla/dom/RequestBinding.h"
@@ -992,6 +993,12 @@ nsresult ScriptLoader::StartLoadInternal(
     return NS_ERROR_FAILURE;
   }
 
+  IntegrityPolicy* policy = IntegrityPolicy::Cast(
+      PolicyContainer::GetIntegrityPolicy(mDocument->GetPolicyContainer()));
+  if (policy && policy->HasWaictFor(IntegrityPolicy::DestinationType::Script)) {
+    aRequest->mFetchSourceOnly = true;
+  }
+
   ScriptLoader::PrepareCacheInfoChannel(channel, aRequest);
 
   LOG(("ScriptLoadRequest (%p): mode=%u tracking=%d", aRequest,
@@ -1803,8 +1810,9 @@ ScriptLoadRequest* ScriptLoader::LookupPreloadRequest(
     return nullptr;
   }
 
-  if (auto* integrity = IntegrityPolicy::Cast(
-            PolicyContainer::GetIntegrityPolicy(mDocument->GetPolicyContainer()))) {
+  if (auto* integrity =
+          IntegrityPolicy::Cast(PolicyContainer::GetIntegrityPolicy(
+              mDocument->GetPolicyContainer()))) {
     if (integrity->HasWaictFor(IntegrityPolicy::DestinationType::Script)) {
       return nullptr;
     }
