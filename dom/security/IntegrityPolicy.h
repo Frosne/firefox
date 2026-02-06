@@ -28,6 +28,8 @@ class IntegrityPolicyArgs;
 }  // namespace ipc
 namespace dom {
 
+class Document;
+
 class IntegrityPolicy : public nsIIntegrityPolicy,
                         public nsIStreamLoaderObserver {
  public:
@@ -40,8 +42,7 @@ class IntegrityPolicy : public nsIIntegrityPolicy,
 
   static nsresult ParseHeaders(const nsACString& aHeader,
                                const nsACString& aHeaderRO,
-                               const nsACString& aWaict,
-                               nsIURI* aDocumentURI,
+                               const nsACString& aWaict, nsIURI* aDocumentURI,
                                IntegrityPolicy** aPolicy);
 
   enum class SourceType : uint8_t { Inline };
@@ -82,7 +83,8 @@ class IntegrityPolicy : public nsIIntegrityPolicy,
       MozPromise<bool, bool, /* IsExclusive */ false>;
   RefPtr<WAICTManifestLoadedPromise> WaitForManifestLoad();
 
-  bool CheckHash(nsIURI* aURI, const nsACString& aHash);
+  bool CheckHash(nsIURI* aURI, const nsACString& aHash,
+                 Document* aDocument = nullptr);
 
  protected:
   virtual ~IntegrityPolicy();
