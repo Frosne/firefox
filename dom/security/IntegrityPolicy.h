@@ -134,6 +134,10 @@ class IntegrityPolicy : public nsIIntegrityPolicy,
   WAICTManifest mWaictManifest;
   Destinations mWaictDestinations;
   RefPtr<WAICTManifestLoadedPromise::Private> mWAICTPromise;
+
+  // Hash tables for O(1) lookup performance with large manifests
+  nsTHashMap<nsString, nsString> mHashesLookup;
+  nsTHashSet<nsString> mAnyHashesLookup;
 };
 
 }  // namespace dom
