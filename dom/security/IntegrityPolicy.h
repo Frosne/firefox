@@ -16,6 +16,9 @@
 #include "nsIIntegrityPolicy.h"
 #include "nsIStreamLoader.h"
 #include "nsTArray.h"
+#include "nsTHashMap.h"
+#include "nsTHashSet.h"
+#include "nsHashKeys.h"
 
 #define NS_INTEGRITYPOLICY_CONTRACTID "@mozilla.org/integritypolicy;1"
 
@@ -136,8 +139,8 @@ class IntegrityPolicy : public nsIIntegrityPolicy,
   RefPtr<WAICTManifestLoadedPromise::Private> mWAICTPromise;
 
   // We translate the received un-JSONed arrays to hashmap/set
-  nsTHashMap<nsString, nsString> mHashesLookup;
-  nsTHashSet<nsString> mAnyHashesLookup;
+  nsTHashMap<nsStringHashKey, nsString> mHashesLookup;
+  nsTHashSet<nsStringHashKey> mAnyHashesLookup;
 };
 
 }  // namespace dom
