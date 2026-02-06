@@ -8,6 +8,7 @@
 
 #include "WAICTLog.h"
 #include "WAICTUtils.h"
+#include "WAICTLog.h"
 #include "mozilla/Logging.h"
 #include "mozilla/StaticPrefs_security.h"
 #include "mozilla/dom/RequestBinding.h"
@@ -332,7 +333,17 @@ bool IntegrityPolicy::CheckHash(nsIURI* aURI, const nsACString& aHash) {
       continue;
     }
 
-    if (NS_ConvertUTF16toUTF8(entry.mValue) != aHash) {
+    nsCString base64Part;
+    nsCString hashEntry = NS_ConvertUTF16toUTF8(entry.mValue);
+    // SRI hash format
+    if (StringBeginsWith(hashEntry, "sha256-"_ns) ||
+        StringBeginsWith(hashEntry, "SHA256-"_ns)) {
+      base64Part = Substring(hashEntry, strlen("sha256-"));
+    } else {
+      base64Part = hashEntry;
+    }
+
+    if (base64Part != aHash) {
       MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
                   "IntegrityPolicy::CheckHash: Wrong hash ({} != {})",
                   NS_ConvertUTF16toUTF8(entry.mValue), nsCString(aHash));
@@ -390,6 +401,109 @@ nsresult IntegrityPolicy::ParseWaict(nsIURI* aDocumentURI,
   return NS_OK;
 }
 
+enum class ManifestValidationStatus : uint8_t {
+  OK,
+  InvalidJSON,
+  MissingVersion,
+  InvalidVersion,
+  InvalidHashFormat
+};
+
+// It's probably already exists somewhere in Firefox
+bool IsValidBase64(const nsACString& aBase64) {
+  if (aBase64.IsEmpty()) {
+    return false;
+  }
+
+  for (uint32_t i = 0; i < aBase64.Length(); i++) {
+    char c = aBase64.CharAt(i);
+    if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+          (c >= '0' && c <= '9') || c == '+' || c == '/' || c == '=')) {
+      return false;
+    }
+  }
+
+  int paddingStart = aBase64.FindChar('=');
+  if (paddingStart != kNotFound) {
+    for (uint32_t i = paddingStart; i < aBase64.Length(); i++) {
+      if (aBase64.CharAt(i) != '=') {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+// We accept both "sha256-<base64>" and "<base64>" formats
+bool ValidateHashValue(const nsAString& aHash) {
+  NS_ConvertUTF16toUTF8 hash(aHash);
+  nsCString base64Part;
+
+  // SRI hash format
+  if (StringBeginsWith(hash, "sha256-"_ns) ||
+      StringBeginsWith(hash, "SHA256-"_ns)) {
+    base64Part = Substring(hash, strlen("sha256-"));
+  } else {
+    base64Part = hash;
+  }
+
+  if (!IsValidBase64(base64Part)) {
+    return false;
+  }
+
+  // SHA-256 produces 32 bytes -> 43 or 44 chars in base64
+  if (base64Part.Length() != 43 && base64Part.Length() != 44) {
+    return false;
+  }
+
+  // If 44 chars, must end with exactly one '='
+  if (base64Part.Length() == 44 && base64Part[43] != '=') {
+    return false;
+  }
+
+  // If 43 chars, must not contain '='
+  if (base64Part.Length() == 43 && base64Part.Contains('=')) {
+    return false;
+  }
+
+  return true;
+}
+
+bool ValidateHashes(const Record<nsString, nsString>& aHashes) {
+  for (const auto& entry : aHashes.Entries()) {
+    if (entry.mKey.IsEmpty() || entry.mValue.IsEmpty() ||
+        !ValidateHashValue(entry.mValue)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+ManifestValidationStatus ValidateManifest(const nsACString& aManifestJSON,
+                                          WAICTManifest& aOutManifest) {
+  if (!aOutManifest.Init(NS_ConvertUTF8toUTF16(aManifestJSON))) {
+    return ManifestValidationStatus::InvalidJSON;
+  }
+
+  // Only the version 1 is supported for now.
+  if (aOutManifest.mVersion != 1) {
+    return ManifestValidationStatus::InvalidVersion;
+  }
+
+  // Could integrity policy be empty?
+  // if (aOutManifest.mIntegrityPolicy.IsEmpty()) {
+  //   return ManifestValidationStatus::MissingIntegrityPolicy;
+  // }
+
+  if (!ValidateHashes(aOutManifest.mHashes)) {
+    return ManifestValidationStatus::InvalidHashFormat;
+  }
+
+  return ManifestValidationStatus::OK;
+}
+
 NS_IMETHODIMP IntegrityPolicy::OnStreamComplete(nsIStreamLoader* aLoader,
                                                 nsISupports* context,
                                                 nsresult aStatus,
@@ -399,14 +513,21 @@ NS_IMETHODIMP IntegrityPolicy::OnStreamComplete(nsIStreamLoader* aLoader,
               "IntegrityPolicy::OnStreamComplete: dataLen = {}", aDataLen);
 
   if (NS_FAILED(aStatus)) {
+    mWAICTPromise->Reject(false, __func__);
     return NS_OK;
   }
 
+  // We can move this to ValidateManifest if we want.
   nsDependentCSubstring data(reinterpret_cast<const char*>(aData), aDataLen);
-
-  if (!mWaictManifest.Init(NS_ConvertUTF8toUTF16(data))) {
-    MOZ_LOG_FMT(gWaictLog, LogLevel::Warning, "Failed to parse manifest");
+  ManifestValidationStatus status = ValidateManifest(data, mWaictManifest);
+  if (status != ManifestValidationStatus::OK) {
+    MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
+            "Failed to validate WAICT manifest, error= {}",
+            static_cast<uint8_t>(status));
+    mWAICTPromise->Reject(false, __func__);
     return NS_OK;
+  } else {
+    MOZ_LOG_FMT(gWaictLog, LogLevel::Debug, ("Manifest Validation success"));
   }
 
   MOZ_LOG_FMT(gWaictLog, LogLevel::Info, "Got manifest, version={}",
