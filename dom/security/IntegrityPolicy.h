@@ -135,7 +135,7 @@ class IntegrityPolicy : public nsIIntegrityPolicy,
   Destinations mWaictDestinations;
   RefPtr<WAICTManifestLoadedPromise::Private> mWAICTPromise;
 
-  // Hash tables for O(1) lookup performance with large manifests
+  // We translate the received un-JSONed arrays to hashmap/set
   nsTHashMap<nsString, nsString> mHashesLookup;
   nsTHashSet<nsString> mAnyHashesLookup;
 };

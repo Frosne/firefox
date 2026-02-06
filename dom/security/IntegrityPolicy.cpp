@@ -312,6 +312,7 @@ IntegrityPolicy::WaitForManifestLoad() {
   return mWAICTPromise;
 }
 
+// Here CheckHash will go through 2 sets - mHashes and mAnyHashes
 bool IntegrityPolicy::CheckHash(nsIURI* aURI, const nsACString& aHash) {
   MOZ_LOG_FMT(gWaictLog, LogLevel::Debug,
               "IntegrityPolicy::CheckHash aURI = {} aHash = {}",
@@ -325,21 +326,12 @@ bool IntegrityPolicy::CheckHash(nsIURI* aURI, const nsACString& aHash) {
 
   // First, try path-based lookup in hashes
   if (!mHashesLookup.IsEmpty()) {
-    // Get the path from the URI to use as lookup key
     nsAutoCString path;
+    // https://searchfox.org/firefox-main/source/netwerk/base/DefaultURI.cpp#135
+    // TODO: is it the best/correct way? 
     nsresult rv = aURI->GetPathQueryRef(path);
     if (NS_SUCCEEDED(rv)) {
-      // Try relative path lookup first
       nsString* hashValue = mHashesLookup.Lookup(NS_ConvertUTF8toUTF16(path));
-
-      // If not found, try full spec
-      if (!hashValue) {
-        nsAutoCString spec;
-        rv = aURI->GetSpec(spec);
-        if (NS_SUCCEEDED(rv)) {
-          hashValue = mHashesLookup.Lookup(NS_ConvertUTF8toUTF16(spec));
-        }
-      }
 
       if (hashValue) {
         // Found in path-based hashes, validate the hash value
@@ -553,7 +545,11 @@ NS_IMETHODIMP IntegrityPolicy::OnStreamComplete(nsIStreamLoader* aLoader,
     MOZ_LOG_FMT(gWaictLog, LogLevel::Debug, ("Manifest Validation success"));
   }
 
-  // Build hash tables for O(1) lookup performance
+  // JSON mHashes/AnyHashes are represented as arrays after parsing
+  // If we don't want to have O(n) (where n can be 10-100k) lookup
+  // We need to translate it to hashset/hashmap
+
+  // If mHashes are not empty
   if (mWaictManifest.mHashes.WasPassed()) {
     const auto& entries = mWaictManifest.mHashes.Value().Entries();
     mHashesLookup.Clear();
@@ -561,10 +557,12 @@ NS_IMETHODIMP IntegrityPolicy::OnStreamComplete(nsIStreamLoader* aLoader,
     for (const auto& entry : entries) {
       mHashesLookup.InsertOrUpdate(entry.mKey, entry.mValue);
     }
+    // AW: remove if too much of logging :) same below
     MOZ_LOG_FMT(gWaictLog, LogLevel::Debug,
                 "Built hash lookup table with {} entries", entries.Length());
   }
 
+  // If mAnyHashes are not empty
   if (mWaictManifest.mAny_hashes.WasPassed()) {
     const auto& hashes = mWaictManifest.mAny_hashes.Value();
     mAnyHashesLookup.Clear();
