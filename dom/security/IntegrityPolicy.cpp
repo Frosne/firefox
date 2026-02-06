@@ -8,16 +8,18 @@
 
 #include "WAICTLog.h"
 #include "WAICTUtils.h"
-#include "WAICTLog.h"
 #include "mozilla/Logging.h"
 #include "mozilla/StaticPrefs_security.h"
+#include "mozilla/dom/Document.h"
 #include "mozilla/dom/RequestBinding.h"
 #include "mozilla/ipc/PBackgroundSharedTypes.h"
 #include "mozilla/net/SFVService.h"
 #include "nsCOMPtr.h"
+#include "nsContentUtils.h"
 #include "nsIClassInfoImpl.h"
 #include "nsIObjectInputStream.h"
 #include "nsIObjectOutputStream.h"
+#include "nsIScriptError.h"
 #include "nsString.h"
 
 using namespace mozilla;
@@ -312,10 +314,13 @@ IntegrityPolicy::WaitForManifestLoad() {
   return mWAICTPromise;
 }
 
-bool IntegrityPolicy::CheckHash(nsIURI* aURI, const nsACString& aHash) {
+bool IntegrityPolicy::CheckHash(nsIURI* aURI, const nsACString& aHash,
+                                Document* aDocument) {
   MOZ_LOG_FMT(gWaictLog, LogLevel::Debug,
               "IntegrityPolicy::CheckHash aURI = {} aHash = {}",
               aURI->GetSpecOrDefault().get(), nsCString(aHash).get());
+
+  nsCString uriSpec = aURI->GetSpecOrDefault();
 
   for (auto& entry : mWaictManifest.mHashes.Entries()) {
     nsCOMPtr<nsIURI> uri;
@@ -324,6 +329,13 @@ bool IntegrityPolicy::CheckHash(nsIURI* aURI, const nsACString& aHash) {
     if (!uri) {
       MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
                   "IntegrityPolicy::CheckHash: Failed to parse URL");
+      if (aDocument) {
+        nsTArray<nsString> params = {entry.mKey};
+        nsContentUtils::ReportToConsole(nsIScriptError::warningFlag, "WAICT"_ns,
+                                        aDocument,
+                                        nsContentUtils::eSECURITY_PROPERTIES,
+                                        "WAICTManifestURLParseError", params);
+      }
       continue;
     }
 
@@ -347,6 +359,14 @@ bool IntegrityPolicy::CheckHash(nsIURI* aURI, const nsACString& aHash) {
       MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
                   "IntegrityPolicy::CheckHash: Wrong hash ({} != {})",
                   NS_ConvertUTF16toUTF8(entry.mValue), nsCString(aHash));
+      if (aDocument) {
+        nsTArray<nsString> params = {NS_ConvertUTF8toUTF16(uriSpec),
+                                     NS_ConvertUTF8toUTF16(hashEntry),
+                                     NS_ConvertUTF8toUTF16(aHash)};
+        nsContentUtils::ReportToConsole(
+            nsIScriptError::errorFlag, "WAICT"_ns, aDocument,
+            nsContentUtils::eSECURITY_PROPERTIES, "WAICTHashMismatch", params);
+      }
       return false;
     }
 
@@ -357,6 +377,13 @@ bool IntegrityPolicy::CheckHash(nsIURI* aURI, const nsACString& aHash) {
 
   MOZ_LOG_FMT(gWaictLog, LogLevel::Debug,
               "IntegrityPolicy::CheckHash: URL not found");
+  if (aDocument) {
+    nsTArray<nsString> params = {NS_ConvertUTF8toUTF16(uriSpec)};
+    nsContentUtils::ReportToConsole(nsIScriptError::errorFlag, "WAICT"_ns,
+                                    aDocument,
+                                    nsContentUtils::eSECURITY_PROPERTIES,
+                                    "WAICTResourceNotInManifest", params);
+  }
   return false;
 }
 
@@ -522,8 +549,8 @@ NS_IMETHODIMP IntegrityPolicy::OnStreamComplete(nsIStreamLoader* aLoader,
   ManifestValidationStatus status = ValidateManifest(data, mWaictManifest);
   if (status != ManifestValidationStatus::OK) {
     MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
-            "Failed to validate WAICT manifest, error= {}",
-            static_cast<uint8_t>(status));
+                "Failed to validate WAICT manifest, error= {}",
+                static_cast<uint8_t>(status));
     mWAICTPromise->Reject(false, __func__);
     return NS_OK;
   } else {
