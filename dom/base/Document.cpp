@@ -4077,10 +4077,16 @@ nsresult Document::InitIntegrityPolicy(nsIChannel* aChannel) {
     (void)httpChannel->GetResponseHeader("integrity-policy-waict-v1"_ns, waict);
   }
 
+  if (!waict.IsEmpty()) {
+    nsContentUtils::ReportToConsole(
+        nsIScriptError::errorFlag, "requestStorageAccess"_ns, this,
+        nsContentUtils::eDOM_PROPERTIES, "RequestStorageAccessUserGesture");
+  }
+
   RefPtr<IntegrityPolicy> integrityPolicy;
   rv = IntegrityPolicy::ParseHeaders(headerValue, headerROValue, waict,
                                      mDocumentURI,
-                                     getter_AddRefs(integrityPolicy));
+                                     getter_AddRefs(integrityPolicy), this);
   NS_ENSURE_SUCCESS(rv, rv);
 
   mPolicyContainer->SetIntegrityPolicy(integrityPolicy);
@@ -8394,6 +8400,11 @@ void Document::SetScriptGlobalObject(
   if (nsIContentSecurityPolicy* csp =
           PolicyContainer::GetCSP(mPolicyContainer)) {
     nsCSPContext::Cast(csp)->flushConsoleMessages();
+  }
+
+  if (nsIIntegrityPolicy* integrityPolicy =
+          PolicyContainer::GetIntegrityPolicy(mPolicyContainer)) {
+    IntegrityPolicy::Cast(integrityPolicy)->FlushConsoleMessages();
   }
 
   nsCOMPtr<nsIHttpChannelInternal> internalChannel =
