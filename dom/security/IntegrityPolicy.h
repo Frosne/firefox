@@ -31,6 +31,8 @@ class IntegrityPolicyArgs;
 }  // namespace ipc
 namespace dom {
 
+class Document;
+
 class IntegrityPolicy : public nsIIntegrityPolicy,
                         public nsIStreamLoaderObserver {
  public:
@@ -84,7 +86,8 @@ class IntegrityPolicy : public nsIIntegrityPolicy,
       MozPromise<bool, bool, /* IsExclusive */ false>;
   RefPtr<WAICTManifestLoadedPromise> WaitForManifestLoad();
 
-  bool CheckHash(nsIURI* aURI, const nsACString& aHash);
+  bool CheckHash(nsIURI* aURI, const nsACString& aHash,
+                 Document* aDocument = nullptr);
 
   enum class ManifestValidationStatus : uint8_t {
     OK,

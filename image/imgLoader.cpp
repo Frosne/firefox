@@ -3082,14 +3082,15 @@ ProxyListener::OnStopRequest(nsIRequest* aRequest, nsresult status) {
               [listener = nsCOMPtr{mDestListener}, channel,
                request = nsCOMPtr{aRequest}, status,
                integrity = RefPtr{integrity},
-               computedHash = nsCString(computedHash)](bool) {
+               computedHash = nsCString(computedHash),
+               doc = RefPtr{doc}](bool) {
                 printf("ProxyListener::OnStopRequest: Promise resolved\n");
 
                 // XXX Not clear if we want to use pre-redirect URL.
                 nsCOMPtr<nsIURI> originalURI;
                 channel->GetOriginalURI(getter_AddRefs(originalURI));
                 if (computedHash.IsEmpty() ||
-                    !integrity->CheckHash(originalURI, computedHash)) {
+                    !integrity->CheckHash(originalURI, computedHash, doc)) {
                   printf("ProxyListener::OnStopRequest: Wrong hash\n");
                   return listener->OnStopRequest(request, NS_ERROR_FAILURE);
                 }
