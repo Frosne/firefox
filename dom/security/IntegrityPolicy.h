@@ -46,7 +46,10 @@ class IntegrityPolicy : public nsIIntegrityPolicy,
   static nsresult ParseHeaders(const nsACString& aHeader,
                                const nsACString& aHeaderRO,
                                const nsACString& aWaict, nsIURI* aDocumentURI,
-                               IntegrityPolicy** aPolicy);
+                               IntegrityPolicy** aPolicy,
+                               Document* aDocument = nullptr);
+
+  void FlushConsoleMessages();
 
   enum class SourceType : uint8_t { Inline };
 
@@ -99,14 +102,20 @@ class IntegrityPolicy : public nsIIntegrityPolicy,
   };
 
   static ManifestValidationStatus ValidateManifest(
-      const nsACString& aManifestJSON, WAICTManifest& aOutManifest);
+      const nsACString& aManifestJSON, WAICTManifest& aOutManifest,
+      IntegrityPolicy* aPolicy = nullptr);
 
  protected:
   virtual ~IntegrityPolicy();
 
  private:
-  nsresult ParseWaict(nsIURI* aDocumentURI, const nsACString& aHeader);
+  nsresult ParseWaict(nsIURI* aDocumentURI, const nsACString& aHeader,
+                      Document* aDocument);
   void FetchWaictManifest();
+
+  void ReportOrQueueMessage(uint32_t aErrorFlags, const nsACString& aCategory,
+                            const char* aMessageName,
+                            const nsTArray<nsString>& aParams);
 
   class Entry final {
    public:
@@ -135,6 +144,7 @@ class IntegrityPolicy : public nsIIntegrityPolicy,
   Maybe<Entry> mReportOnly;
 
   nsCOMPtr<nsIURI> mDocumentURI;
+  RefPtr<Document> mDocument;
   nsCString mWaictManifestURL;
   // XXX We should not use this directly.
   WAICTManifest mWaictManifest;
@@ -144,6 +154,15 @@ class IntegrityPolicy : public nsIIntegrityPolicy,
   // We translate the received un-JSONed arrays to hashmap/set
   nsTHashMap<nsStringHashKey, nsString> mHashesLookup;
   nsTHashSet<nsStringHashKey> mAnyHashesLookup;
+  struct IPConsoleMsgQueueElem {
+    uint32_t mErrorFlags;
+    nsCString mCategory;
+    nsCString mMessageName;
+    nsTArray<nsString> mParams;
+  };
+
+  bool mQueueUpMessages = true;
+  nsTArray<IPConsoleMsgQueueElem> mConsoleMsgQueue;
 };
 
 }  // namespace dom
