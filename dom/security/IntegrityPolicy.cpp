@@ -37,6 +37,22 @@ IntegrityPolicy::~IntegrityPolicy() {
   }
 }
 
+void IntegrityPolicy::FlushConsoleMessages() {
+  mQueueUpMessages = false;
+
+  if (!mDocument) {
+    mConsoleMsgQueue.Clear();
+    return;
+  }
+
+  for (const auto& elem : mConsoleMsgQueue) {
+    nsContentUtils::ReportToConsole(elem.mErrorFlags, elem.mCategory, mDocument,
+                                    nsContentUtils::eSECURITY_PROPERTIES,
+                                    elem.mMessageName.get(), elem.mParams);
+  }
+  mConsoleMsgQueue.Clear();
+}
+
 RequestDestination ContentTypeToDestination(nsContentPolicyType aType) {
   // From SecFetch.cpp
   // https://searchfox.org/mozilla-central/rev/f1e32fa7054859d37eea8804e220dfcc7fb53b03/dom/security/SecFetch.cpp#24-32
@@ -214,7 +230,8 @@ nsresult IntegrityPolicy::ParseHeaders(const nsACString& aHeader,
                                        const nsACString& aHeaderRO,
                                        const nsACString& aWaict,
                                        nsIURI* aDocumentURI,
-                                       IntegrityPolicy** aPolicy) {
+                                       IntegrityPolicy** aPolicy,
+                                       Document* aDocument) {
   if (!StaticPrefs::security_integrity_policy_enabled()) {
     return NS_OK;
   }
@@ -293,7 +310,7 @@ nsresult IntegrityPolicy::ParseHeaders(const nsACString& aHeader,
     }
   }
 
-  policy->ParseWaict(aDocumentURI, aWaict);
+  policy->ParseWaict(aDocumentURI, aWaict, aDocument);
 
   // 6. Return integrityPolicy.
   policy.forget(aPolicy);
@@ -388,11 +405,13 @@ bool IntegrityPolicy::CheckHash(nsIURI* aURI, const nsACString& aHash,
 }
 
 nsresult IntegrityPolicy::ParseWaict(nsIURI* aDocumentURI,
-                                     const nsACString& aHeader) {
+                                     const nsACString& aHeader,
+                                     Document* aDocument) {
   if (aHeader.IsEmpty()) {
     return NS_OK;
   }
 
+  mDocument = aDocument;
   mDocumentURI = aDocumentURI;
 
   nsCOMPtr<nsISFVService> sfv = net::GetSFVService();
@@ -405,6 +424,10 @@ nsresult IntegrityPolicy::ParseWaict(nsIURI* aDocumentURI,
   if (NS_FAILED(rv)) {
     MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
                 "ParseWaict: ParseDictionary failed");
+
+    nsTArray<nsString> params = {NS_ConvertUTF8toUTF16(aHeader)};
+    ReportOrQueueMessage(nsIScriptError::errorFlag, "WAICT"_ns,
+                         "WAICTHeaderParseError", params);
     return rv;
   }
 
@@ -412,6 +435,11 @@ nsresult IntegrityPolicy::ParseWaict(nsIURI* aDocumentURI,
   if (destinationsResult.isErr()) {
     MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
                 "ParseWaict: ParseDestinations failed");
+
+    nsTArray<nsString> params = {NS_ConvertUTF8toUTF16(aHeader)};
+    ReportOrQueueMessage(nsIScriptError::errorFlag, "WAICT"_ns,
+                         "WAICTHeaderBlockedDestinationsParseError", params);
+
     return destinationsResult.unwrapErr();
   }
 
@@ -421,20 +449,17 @@ nsresult IntegrityPolicy::ParseWaict(nsIURI* aDocumentURI,
   if (NS_FAILED(rv)) {
     MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
                 "ParseWaict: waict::ParseManifest failed");
+
+    nsTArray<nsString> params = {NS_ConvertUTF8toUTF16(aHeader)};
+    ReportOrQueueMessage(nsIScriptError::errorFlag, "WAICT"_ns,
+                         "WAICTHeaderManifestParseError", params);
+
     return rv;
   }
 
   FetchWaictManifest();
   return NS_OK;
 }
-
-enum class ManifestValidationStatus : uint8_t {
-  OK,
-  InvalidJSON,
-  MissingVersion,
-  InvalidVersion,
-  InvalidHashFormat
-};
 
 // It's probably already exists somewhere in Firefox
 bool IsValidBase64(const nsACString& aBase64) {
@@ -463,7 +488,7 @@ bool IsValidBase64(const nsACString& aBase64) {
 }
 
 // We accept both "sha256-<base64>" and "<base64>" formats
-bool ValidateHashValue(const nsAString& aHash) {
+static bool ValidateHashValue(const nsAString& aHash) {
   NS_ConvertUTF16toUTF8 hash(aHash);
   nsCString base64Part;
 
@@ -497,25 +522,18 @@ bool ValidateHashValue(const nsAString& aHash) {
   return true;
 }
 
-bool ValidateHashes(const Record<nsString, nsString>& aHashes) {
-  for (const auto& entry : aHashes.Entries()) {
-    if (entry.mKey.IsEmpty() || entry.mValue.IsEmpty() ||
-        !ValidateHashValue(entry.mValue)) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
-ManifestValidationStatus ValidateManifest(const nsACString& aManifestJSON,
-                                          WAICTManifest& aOutManifest) {
+IntegrityPolicy::ManifestValidationStatus IntegrityPolicy::ValidateManifest(
+    const nsACString& aManifestJSON, WAICTManifest& aOutManifest) {
   if (!aOutManifest.Init(NS_ConvertUTF8toUTF16(aManifestJSON))) {
+    ReportOrQueueMessage(nsIScriptError::errorFlag, "WAICT"_ns,
+                         "WAICTManifestJSONParseError", {});
     return ManifestValidationStatus::InvalidJSON;
   }
 
   // Only the version 1 is supported for now.
   if (aOutManifest.mVersion != 1) {
+    ReportOrQueueMessage(nsIScriptError::errorFlag, "WAICT"_ns,
+                         "WAICTManifestJSONParseError", {});
     return ManifestValidationStatus::InvalidVersion;
   }
 
@@ -524,8 +542,14 @@ ManifestValidationStatus ValidateManifest(const nsACString& aManifestJSON,
   //   return ManifestValidationStatus::MissingIntegrityPolicy;
   // }
 
-  if (!ValidateHashes(aOutManifest.mHashes)) {
-    return ManifestValidationStatus::InvalidHashFormat;
+  for (const auto& entry : aOutManifest.mHashes.Entries()) {
+    if (entry.mKey.IsEmpty() || entry.mValue.IsEmpty() ||
+        !ValidateHashValue(entry.mValue)) {
+      nsTArray<nsString> params = {entry.mKey, entry.mValue};
+      ReportOrQueueMessage(nsIScriptError::errorFlag, "WAICT"_ns,
+                           "WAICTManifestInvalidHash", params);
+      return ManifestValidationStatus::InvalidHashFormat;
+    }
   }
 
   return ManifestValidationStatus::OK;
@@ -577,6 +601,9 @@ void IntegrityPolicy::FetchWaictManifest() {
     MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
                 "Could not parse manifest URL: rv={}",
                 static_cast<uint32_t>(rv));
+    nsTArray<nsString> params = {NS_ConvertUTF8toUTF16(mWaictManifestURL)};
+    ReportOrQueueMessage(nsIScriptError::errorFlag, "WAICT"_ns,
+                         "WAICTManifestFetchURLParseError", params);
     mWAICTPromise->Reject(true, __func__);
     return;
   }
@@ -591,7 +618,30 @@ void IntegrityPolicy::FetchWaictManifest() {
     MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
                 "Could not fetch manifest URL: rv = {}",
                 static_cast<uint32_t>(rv));
+    nsTArray<nsString> params = {NS_ConvertUTF8toUTF16(mWaictManifestURL)};
+    ReportOrQueueMessage(nsIScriptError::errorFlag, "WAICT"_ns,
+                         "WAICTManifestFetchError", params);
     mWAICTPromise->Reject(true, __func__);
+  }
+}
+
+void IntegrityPolicy::ReportOrQueueMessage(uint32_t aErrorFlags,
+                                           const nsACString& aCategory,
+                                           const char* aMessageName,
+                                           const nsTArray<nsString>& aParams) {
+  if (mQueueUpMessages) {
+    IPConsoleMsgQueueElem& elem = *mConsoleMsgQueue.AppendElement();
+    elem.mErrorFlags = aErrorFlags;
+    elem.mCategory = aCategory;
+    elem.mMessageName = nsCString(aMessageName);
+    elem.mParams = aParams.Clone();
+    return;
+  }
+
+  if (mDocument) {
+    nsContentUtils::ReportToConsole(aErrorFlags, aCategory, mDocument,
+                                    nsContentUtils::eSECURITY_PROPERTIES,
+                                    aMessageName, aParams);
   }
 }
 

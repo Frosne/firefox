@@ -43,7 +43,10 @@ class IntegrityPolicy : public nsIIntegrityPolicy,
   static nsresult ParseHeaders(const nsACString& aHeader,
                                const nsACString& aHeaderRO,
                                const nsACString& aWaict, nsIURI* aDocumentURI,
-                               IntegrityPolicy** aPolicy);
+                               IntegrityPolicy** aPolicy,
+                               Document* aDocument = nullptr);
+
+  void FlushConsoleMessages();
 
   enum class SourceType : uint8_t { Inline };
 
@@ -90,8 +93,24 @@ class IntegrityPolicy : public nsIIntegrityPolicy,
   virtual ~IntegrityPolicy();
 
  private:
-  nsresult ParseWaict(nsIURI* aDocumentURI, const nsACString& aHeader);
+  nsresult ParseWaict(nsIURI* aDocumentURI, const nsACString& aHeader,
+                      Document* aDocument);
   void FetchWaictManifest();
+
+  enum class ManifestValidationStatus : uint8_t {
+    OK,
+    InvalidJSON,
+    MissingVersion,
+    InvalidVersion,
+    InvalidHashFormat
+  };
+
+  ManifestValidationStatus ValidateManifest(const nsACString& aManifestJSON,
+                                            WAICTManifest& aOutManifest);
+
+  void ReportOrQueueMessage(uint32_t aErrorFlags, const nsACString& aCategory,
+                            const char* aMessageName,
+                            const nsTArray<nsString>& aParams);
 
   class Entry final {
    public:
@@ -120,11 +139,22 @@ class IntegrityPolicy : public nsIIntegrityPolicy,
   Maybe<Entry> mReportOnly;
 
   nsCOMPtr<nsIURI> mDocumentURI;
+  RefPtr<Document> mDocument;
   nsCString mWaictManifestURL;
   // XXX We should not use this directly.
   WAICTManifest mWaictManifest;
   Destinations mWaictDestinations;
   RefPtr<WAICTManifestLoadedPromise::Private> mWAICTPromise;
+
+  struct IPConsoleMsgQueueElem {
+    uint32_t mErrorFlags;
+    nsCString mCategory;
+    nsCString mMessageName;
+    nsTArray<nsString> mParams;
+  };
+
+  bool mQueueUpMessages = true;
+  nsTArray<IPConsoleMsgQueueElem> mConsoleMsgQueue;
 };
 }  // namespace dom
 
