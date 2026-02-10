@@ -92,6 +92,8 @@ class IntegrityPolicy : public nsIIntegrityPolicy,
   bool CheckHash(nsIURI* aURI, const nsACString& aHash,
                  Document* aDocument = nullptr);
 
+  bool IsWaictEnforce() const { return mWaictEnforce; }
+
   enum class ManifestValidationStatus : uint8_t {
     OK,
     InvalidJSON,
@@ -149,6 +151,7 @@ class IntegrityPolicy : public nsIIntegrityPolicy,
   // XXX We should not use this directly.
   WAICTManifest mWaictManifest;
   Destinations mWaictDestinations;
+  bool mWaictEnforce = false;
   RefPtr<WAICTManifestLoadedPromise::Private> mWAICTPromise;
 
   // We translate the received un-JSONed arrays to hashmap/set

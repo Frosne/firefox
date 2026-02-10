@@ -3092,17 +3092,35 @@ ProxyListener::OnStopRequest(nsIRequest* aRequest, nsresult status) {
                 if (computedHash.IsEmpty() ||
                     !integrity->CheckHash(originalURI, computedHash, doc)) {
                   printf("ProxyListener::OnStopRequest: Wrong hash\n");
-                  return listener->OnStopRequest(request, NS_ERROR_FAILURE);
+
+                  // TODO: we would need a function to process the output
+                  // and choose the request result based on the audit/enforce
+                  // But in general, if enforce - we block the resource
+                  // Otherwise we allow it
+                  if (integrity->IsWaictEnforce()) {
+                    // Enforce mode - block the image
+                    return listener->OnStopRequest(request, NS_ERROR_FAILURE);
+                  } else {
+                    // Audit mode - allow but report
+                    return listener->OnStopRequest(request, status);
+                  }
+
                 }
 
                 printf("ProxyListener::OnStopRequest: Correct hash \\o/\n");
                 return listener->OnStopRequest(request, status);
               },
               [listener = nsCOMPtr{mDestListener},
-               request = nsCOMPtr{aRequest}](bool) {
+               request = nsCOMPtr{aRequest}, status, 
+               integrity = RefPtr{integrity}](bool) {
                 MOZ_LOG(gWaictLog, LogLevel::Error,
                         ("ProxyListener::OnStopRequest -- Promise rejected\n"));
-                // return listener->OnStopRequest(request, NS_ERROR_FAILURE);
+
+                  if (integrity->IsWaictEnforce()) {
+                    return listener->OnStopRequest(request, NS_ERROR_FAILURE);
+                  } else {
+                    return listener->OnStopRequest(request, status);
+                  }
               });
 
           return NS_OK;
