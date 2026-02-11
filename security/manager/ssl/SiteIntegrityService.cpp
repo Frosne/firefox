@@ -4,9 +4,7 @@
 
 #include "SiteIntegrityService.h"
 
-#include "WAICTUtils.h"
 #include "mozilla/Logging.h"
-#include "mozilla/net/SFVService.h"
 #include "nsIDataStorage.h"
 #include "prtime.h"
 
@@ -46,24 +44,16 @@ nsresult SiteIntegrityService::Init() {
 }
 
 NS_IMETHODIMP
-SiteIntegrityService::ProcessHeader(nsIURI* aSourceURI,
-                                    const nsACString& aHeader,
-                                    const OriginAttributes& aOriginAttributes) {
-  MOZ_LOG_FMT(gSiteIntegrityLog, LogLevel::Debug, "ProcessHeader: {}",
-              PromiseFlatCString(aHeader));
-
-  uint64_t maxAge;
-  nsresult rv = ParseHeader(aHeader, &maxAge);
-  if (NS_FAILED(rv)) {
-    MOZ_LOG_FMT(gSiteIntegrityLog, LogLevel::Warning,
-                "Failed to parse header: {:x}", static_cast<uint32_t>(rv));
-    return rv;
-  }
+SiteIntegrityService::SetProtected(nsIURI* aSourceURI,
+                                   const OriginAttributes& aOriginAttributes,
+                                   uint64_t aMaxAge) {
+  MOZ_LOG_FMT(gSiteIntegrityLog, LogLevel::Debug, "SetProtected: max-age={}",
+              aMaxAge);
 
   nsAutoCString storageKey;
   nsIDataStorage::DataType storageType;
-  rv = GetStorageKeyFromURI(aSourceURI, aOriginAttributes, storageKey,
-                            &storageType);
+  nsresult rv = GetStorageKeyFromURI(aSourceURI, aOriginAttributes, storageKey,
+                                     &storageType);
   if (NS_FAILED(rv)) {
     MOZ_LOG_FMT(gSiteIntegrityLog, LogLevel::Warning,
                 "Failed to get storage key: {:x}", static_cast<uint32_t>(rv));
@@ -71,7 +61,8 @@ SiteIntegrityService::ProcessHeader(nsIURI* aSourceURI,
   }
 
   PRTime now = PR_Now();
-  PRTime expirationTime = now + (static_cast<PRTime>(maxAge) * PR_USEC_PER_SEC);
+  PRTime expirationTime =
+      now + (static_cast<PRTime>(aMaxAge) * PR_USEC_PER_SEC);
 
   nsAutoCString expirationString;
   expirationString.AppendInt(expirationTime);
@@ -79,27 +70,7 @@ SiteIntegrityService::ProcessHeader(nsIURI* aSourceURI,
   mDataStorage->Put(storageKey, expirationString, storageType);
 
   MOZ_LOG_FMT(gSiteIntegrityLog, LogLevel::Debug,
-              "Header processed successfully, expires at: {}", expirationTime);
-  return NS_OK;
-}
-
-nsresult SiteIntegrityService::ParseHeader(const nsACString& aHeader,
-                                           uint64_t* outMaxAge) {
-  nsCOMPtr<nsISFVService> sfv = net::GetSFVService();
-  NS_ENSURE_TRUE(sfv, NS_ERROR_FAILURE);
-
-  nsCOMPtr<nsISFVDictionary> dict;
-  MOZ_TRY(sfv->ParseDictionary(aHeader, getter_AddRefs(dict)));
-
-  uint64_t maxAge;
-  MOZ_TRY(waict::ParseMaxAge(dict, &maxAge));
-  MOZ_LOG_FMT(gSiteIntegrityLog, LogLevel::Debug, "max-age: {}", maxAge);
-
-  nsAutoCString manifest;
-  MOZ_TRY(waict::ParseManifest(dict, manifest));
-  MOZ_LOG_FMT(gSiteIntegrityLog, LogLevel::Debug, "Manifest URL: {}", manifest);
-
-  *outMaxAge = maxAge;
+              "URI protected successfully, expires at: {}", expirationTime);
   return NS_OK;
 }
 

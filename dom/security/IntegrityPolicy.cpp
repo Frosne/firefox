@@ -9,9 +9,11 @@
 #include "WAICTLog.h"
 #include "WAICTUtils.h"
 #include "mozilla/Logging.h"
+#include "mozilla/NotNull.h"
 #include "mozilla/StaticPrefs_security.h"
 #include "mozilla/dom/Document.h"
 #include "mozilla/dom/RequestBinding.h"
+#include "mozilla/dom/WindowGlobalChild.h"
 #include "mozilla/ipc/PBackgroundSharedTypes.h"
 #include "mozilla/net/SFVService.h"
 #include "nsCOMPtr.h"
@@ -445,6 +447,18 @@ nsresult IntegrityPolicy::ParseWaict(nsIURI* aDocumentURI,
 
   mWaictDestinations = destinationsResult.unwrap();
 
+  rv = waict::ParseMaxAge(dict, &mWaictMaxAge);
+  if (NS_FAILED(rv)) {
+    MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
+                "ParseWaict: waict::ParseMaxAge failed");
+
+    nsTArray<nsString> params = {NS_ConvertUTF8toUTF16(aHeader)};
+    ReportOrQueueMessage(nsIScriptError::errorFlag, "WAICT"_ns,
+                         "WAICTHeaderMaxAgeParseError", params);
+
+    return rv;
+  }
+
   rv = waict::ParseManifest(dict, mWaictManifestURL);
   if (NS_FAILED(rv)) {
     MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
@@ -577,8 +591,15 @@ NS_IMETHODIMP IntegrityPolicy::OnStreamComplete(nsIStreamLoader* aLoader,
                 static_cast<uint8_t>(status));
     mWAICTPromise->Reject(false, __func__);
     return NS_OK;
-  } else {
-    MOZ_LOG_FMT(gWaictLog, LogLevel::Debug, ("Manifest Validation success"));
+  }
+
+  MOZ_LOG_FMT(gWaictLog, LogLevel::Debug, ("Manifest Validation success"));
+
+  if (mDocument && mDocumentURI) {
+    if (WindowGlobalChild* wgc = mDocument->GetWindowGlobalChild()) {
+      wgc->SendSetSiteIntegrityProtected(WrapNotNull(mDocumentURI.get()),
+                                         mWaictMaxAge);
+    }
   }
 
   MOZ_LOG_FMT(gWaictLog, LogLevel::Info, "Got manifest, version={}",

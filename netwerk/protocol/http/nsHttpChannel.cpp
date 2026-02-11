@@ -2819,9 +2819,17 @@ nsresult nsHttpChannel::ProcessWAICTHeader() {
 
   // XXX we support http and https so we probably don't want to include HTTPS in the origin attributes?
   OriginAttributes originAttributes;
-  if (NS_WARN_IF(!StoragePrincipalHelper::GetOriginAttributesForHTTPSRR(
-          this, originAttributes))) {
-    return NS_ERROR_FAILURE;
+
+  if (mURI->SchemeIs("https")) {
+    if (NS_WARN_IF(!StoragePrincipalHelper::GetOriginAttributesForHTTPSRR(
+            this, originAttributes))) {
+      return NS_ERROR_FAILURE;
+    }
+  } else {
+    if (NS_WARN_IF(!StoragePrincipalHelper::GetOriginAttributesForHSTS(
+            this, originAttributes))) {
+      return NS_ERROR_FAILURE;
+    }
   }
 
   nsAutoCString headerValue;
@@ -2854,8 +2862,6 @@ nsresult nsHttpChannel::ProcessWAICTHeader() {
   if (NS_WARN_IF(NS_FAILED(rv))) {
     return rv;
   }
-
-  rv = integrityService->ProcessHeader(mURI, headerValue, originAttributes);
 
   return NS_OK;
 }
