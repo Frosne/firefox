@@ -375,7 +375,7 @@ bool IntegrityPolicy::CheckHash(nsIURI* aURI, const nsACString& aHash,
   if (mHashesLookup.IsEmpty() && mAnyHashesLookup.IsEmpty()) {
     MOZ_LOG_FMT(gWaictLog, LogLevel::Debug,
                 "IntegrityPolicy::CheckHash: No hashes in manifest");
-    return false;
+    return mWaictEnforce ? false : true;
   }
 
   // First, try path-based lookup in hashes
@@ -416,7 +416,7 @@ bool IntegrityPolicy::CheckHash(nsIURI* aURI, const nsACString& aHash,
                 params);
           }
 
-          return false;
+          return mWaictEnforce ? false : true;
         }
 
         MOZ_LOG_FMT(gWaictLog, LogLevel::Info,
@@ -449,7 +449,7 @@ bool IntegrityPolicy::CheckHash(nsIURI* aURI, const nsACString& aHash,
                                     "WAICTResourceNotInManifest", params);
   }
 
-  return false;
+  return mWaictEnforce ? false : true;
 }
 
 nsresult IntegrityPolicy::ParseWaict(nsIURI* aDocumentURI,

@@ -3075,60 +3075,40 @@ ProxyListener::OnStopRequest(nsIRequest* aRequest, nsresult status) {
     if (doc) {
       if (auto* integrity = IntegrityPolicy::Cast(
               PolicyContainer::GetIntegrityPolicy(doc->GetPolicyContainer()))) {
-        if (integrity->HasWaictFor(IntegrityPolicy::DestinationType::Image)) {
-          printf("ProxyListener::OnStopRequest: Waiting for load");
-          integrity->WaitForManifestLoad()->Then(
-              GetCurrentSerialEventTarget(), __func__,
-              [listener = nsCOMPtr{mDestListener}, channel,
-               request = nsCOMPtr{aRequest}, status,
-               integrity = RefPtr{integrity},
-               computedHash = nsCString(computedHash),
-               doc = RefPtr{doc}](bool) {
-                printf("ProxyListener::OnStopRequest: Promise resolved\n");
+        MOZ_ASSERT(
+            integrity->HasWaictFor(IntegrityPolicy::DestinationType::Image));
 
-                // XXX Not clear if we want to use pre-redirect URL.
-                nsCOMPtr<nsIURI> originalURI;
-                channel->GetOriginalURI(getter_AddRefs(originalURI));
-                if (computedHash.IsEmpty() ||
-                    !integrity->CheckHash(originalURI, computedHash, doc)) {
-                  printf("ProxyListener::OnStopRequest: Wrong hash\n");
+        integrity->WaitForManifestLoad()->Then(
+            GetCurrentSerialEventTarget(), __func__,
+            [listener = nsCOMPtr{mDestListener}, channel,
+             request = nsCOMPtr{aRequest}, status,
+             integrity = RefPtr{integrity},
+             computedHash = nsCString(computedHash), doc = RefPtr{doc}](bool) {
+              // XXX Not clear if we want to use pre-redirect URL.
+              nsCOMPtr<nsIURI> originalURI;
+              channel->GetOriginalURI(getter_AddRefs(originalURI));
+              if (!integrity->CheckHash(originalURI, computedHash, doc)) {
+                return listener->OnStopRequest(request, NS_ERROR_FAILURE);
+              }
 
-                  // TODO: we would need a function to process the output
-                  // and choose the request result based on the audit/enforce
-                  // But in general, if enforce - we block the resource
-                  // Otherwise we allow it
-                  if (integrity->IsWaictEnforce()) {
-                    // Enforce mode - block the image
-                    return listener->OnStopRequest(request, NS_ERROR_FAILURE);
-                  } else {
-                    // Audit mode - allow but report
-                    return listener->OnStopRequest(request, status);
-                  }
+              return listener->OnStopRequest(request, status);
+            },
+            [listener = nsCOMPtr{mDestListener}, request = nsCOMPtr{aRequest},
+             status, integrity = RefPtr{integrity}](bool) {
+              MOZ_LOG(gWaictLog, LogLevel::Error,
+                      ("ProxyListener::OnStopRequest -- Promise rejected\n"));
 
-                }
-
-                printf("ProxyListener::OnStopRequest: Correct hash \\o/\n");
+              if (integrity->IsWaictEnforce()) {
+                return listener->OnStopRequest(request, NS_ERROR_FAILURE);
+              } else {
                 return listener->OnStopRequest(request, status);
-              },
-              [listener = nsCOMPtr{mDestListener},
-               request = nsCOMPtr{aRequest}, status, 
-               integrity = RefPtr{integrity}](bool) {
-                MOZ_LOG(gWaictLog, LogLevel::Error,
-                        ("ProxyListener::OnStopRequest -- Promise rejected\n"));
+              }
+            });
 
-                  if (integrity->IsWaictEnforce()) {
-                    return listener->OnStopRequest(request, NS_ERROR_FAILURE);
-                  } else {
-                    return listener->OnStopRequest(request, status);
-                  }
-              });
-
-          return NS_OK;
-        }
+        return NS_OK;
       }
     }
   }
-
   return mDestListener->OnStopRequest(aRequest, status);
 }
 
