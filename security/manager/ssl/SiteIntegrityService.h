@@ -27,7 +27,6 @@ class SiteIntegrityService : public nsISiteIntegrityService {
   virtual ~SiteIntegrityService();
 
  private:
-  nsresult ParseHeader(const nsACString& aHeader, uint64_t* outMaxAge);
   nsresult GetStorageKeyFromURI(nsIURI* aURI,
                                 const OriginAttributes& aOriginAttributes,
                                 nsACString& outStorageKey,

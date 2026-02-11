@@ -141,6 +141,7 @@ class IntegrityPolicy : public nsIIntegrityPolicy,
   nsCOMPtr<nsIURI> mDocumentURI;
   RefPtr<Document> mDocument;
   nsCString mWaictManifestURL;
+  uint64_t mWaictMaxAge = 0;
   // XXX We should not use this directly.
   WAICTManifest mWaictManifest;
   Destinations mWaictDestinations;

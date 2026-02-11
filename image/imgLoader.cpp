@@ -3055,7 +3055,7 @@ ProxyListener::OnStopRequest(nsIRequest* aRequest, nsresult status) {
     }
 
     hasher->Finish();
-    nsAutoCString computedHash = hasher->GetHash();
+    const nsACString& computedHash = hasher->GetHash();
     if (computedHash.IsEmpty()) {
       MOZ_LOG(gWaictLog, LogLevel::Error,
               ("[this=%p] ProxyListener::OnStopRequest -- "
