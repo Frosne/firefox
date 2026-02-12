@@ -60,12 +60,9 @@ nsresult ParseMode(nsISFVDictionary* aDict, bool* outEnforce) {
     nsCOMPtr<nsISFVBareItem> value;
     MOZ_TRY(modeItem->GetValue(getter_AddRefs(value)));
 
-    int32_t itemType;
-    MOZ_TRY(value->GetType(&itemType));
-
-    if (itemType == nsISFVBareItem::TOKEN) {
+    if (nsCOMPtr<nsISFVToken> tokenVal = do_QueryInterface(value)) {
       nsAutoCString token;
-      MOZ_TRY(value->GetValue(token));
+      MOZ_TRY(tokenVal->GetValue(token));
 
       if (token.EqualsLiteral("enforce")) {
         *outEnforce = true;
