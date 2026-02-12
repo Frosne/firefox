@@ -477,6 +477,8 @@ nsresult IntegrityPolicy::ParseWaict(nsIURI* aDocumentURI,
     return modeResult.unwrapErr();
   }
 
+  mWaictEnforce = modeResult.unwrap();
+
   rv = waict::ParseMaxAge(dict, &mWaictMaxAge);
   if (NS_FAILED(rv)) {
     MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
