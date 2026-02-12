@@ -26,7 +26,8 @@ NS_IMPL_ISUPPORTS(IntegrityPolicyWAICT, nsIStreamLoaderObserver)
 
 IntegrityPolicyWAICT::~IntegrityPolicyWAICT() {
   if (mPromise) {
-    mPromise->Reject(false, __func__);
+    mManifestValid = false;
+    mPromise->Resolve(true, __func__);
   }
 }
 
@@ -36,11 +37,28 @@ IntegrityPolicyWAICT::WaitForManifestLoad() {
   return mPromise;
 }
 
-bool IntegrityPolicyWAICT::CheckHash(nsIURI* aURI, const nsACString& aHash,
-                                     Document* aDocument) {
-  MOZ_LOG_FMT(gWaictLog, LogLevel::Debug,
-              "IntegrityPolicyWAICT::CheckHash aURI = {} aHash = {}",
-              aURI->GetSpecOrDefault().get(), nsCString(aHash).get());
+bool IntegrityPolicyWAICT::MaybeCheckResourceIntegrity(
+    nsIURI* aURI, const nsACString& aHash, Document* aDocument) {
+  MOZ_LOG_FMT(
+      gWaictLog, LogLevel::Debug,
+      "IntegrityPolicyWAICT::MaybeCheckResourceIntegrity aURI = {} aHash = {}",
+      aURI->GetSpecOrDefault().get(), nsCString(aHash).get());
+
+  // If manifest failed to load/validate, decision depends on mode
+  if (!mManifestValid) {
+    if (mEnforce) {
+      MOZ_LOG_FMT(
+          gWaictLog, LogLevel::Warning,
+          "IntegrityPolicyWAICT::MaybeCheckResourceIntegrity: Manifest not "
+          "valid, enforce mode - blocking");
+      return false;
+    }
+    MOZ_LOG_FMT(
+        gWaictLog, LogLevel::Info,
+        "IntegrityPolicyWAICT::MaybeCheckResourceIntegrity: Manifest not "
+        "valid, audit mode - proceeding");
+    return true;
+  }
 
   if (!mHashesLookup.IsEmpty()) {
     nsAutoCString path;
@@ -53,14 +71,14 @@ bool IntegrityPolicyWAICT::CheckHash(nsIURI* aURI, const nsACString& aHash,
 
         if (hashEntry != aHash) {
           MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
-                      "IntegrityPolicyWAICT::CheckHash: Wrong hash for path "
+                      "IntegrityPolicyWAICT::MaybeCheckResourceIntegrity: Wrong hash for path "
                       "({} != {})",
                       hashEntry.get(), nsCString(aHash).get());
           return false;
         }
 
         MOZ_LOG_FMT(gWaictLog, LogLevel::Info,
-                    "IntegrityPolicyWAICT::CheckHash: Correct hash "
+                    "IntegrityPolicyWAICT::MaybeCheckResourceIntegrity: Correct hash "
                     "(path-based)");
         return true;
       }
@@ -72,13 +90,13 @@ bool IntegrityPolicyWAICT::CheckHash(nsIURI* aURI, const nsACString& aHash,
 
     if (mAnyHashesLookup.Contains(hashStr)) {
       MOZ_LOG_FMT(gWaictLog, LogLevel::Info,
-                  "IntegrityPolicyWAICT::CheckHash: Hash found in any_hashes");
+                  "IntegrityPolicyWAICT::MaybeCheckResourceIntegrity: Hash found in any_hashes");
       return true;
     }
   }
 
   MOZ_LOG_FMT(gWaictLog, LogLevel::Debug,
-              "IntegrityPolicyWAICT::CheckHash: Hash not found in either "
+              "IntegrityPolicyWAICT::MaybeCheckResourceIntegrity: Hash not found in either "
               "lookup");
   return false;
 }
@@ -155,6 +173,18 @@ nsresult IntegrityPolicyWAICT::ParseHeader(const nsACString& aHeader) {
     nsTArray<nsString> params = {NS_ConvertUTF8toUTF16(aHeader)};
     ReportMessage(nsIScriptError::errorFlag, "WAICT"_ns,
                   "WAICTHeaderManifestParseError", params);
+
+    return rv;
+  }
+
+  rv = waict::ParseMode(dict, &mEnforce);
+  if (NS_FAILED(rv)) {
+    MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
+                "IntegrityPolicyWAICT::Initialize: waict::ParseMode failed");
+
+    nsTArray<nsString> params = {NS_ConvertUTF8toUTF16(aHeader)};
+    ReportMessage(nsIScriptError::errorFlag, "WAICT"_ns,
+                  "WAICTHeaderInvalidMode", params);
 
     return rv;
   }
@@ -279,7 +309,8 @@ NS_IMETHODIMP IntegrityPolicyWAICT::OnStreamComplete(nsIStreamLoader* aLoader,
               "IntegrityPolicyWAICT::OnStreamComplete: dataLen = {}", aDataLen);
 
   if (NS_FAILED(aStatus)) {
-    mPromise->Reject(false, __func__);
+    mManifestValid = false;
+    mPromise->Resolve(true, __func__);
     return NS_OK;
   }
 
@@ -289,7 +320,8 @@ NS_IMETHODIMP IntegrityPolicyWAICT::OnStreamComplete(nsIStreamLoader* aLoader,
     MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
                 "Failed to validate WAICT manifest, error= {}",
                 static_cast<uint8_t>(status));
-    mPromise->Reject(false, __func__);
+    mManifestValid = false;
+    mPromise->Resolve(true, __func__);
     return NS_OK;
   }
 
@@ -324,6 +356,7 @@ NS_IMETHODIMP IntegrityPolicyWAICT::OnStreamComplete(nsIStreamLoader* aLoader,
 
   MOZ_LOG_FMT(gWaictLog, LogLevel::Info, "Got manifest, version={}",
               mManifest.mVersion);
+  mManifestValid = true;
   mPromise->Resolve(true, __func__);
   return NS_OK;
 }
@@ -345,7 +378,8 @@ void IntegrityPolicyWAICT::FetchManifest() {
     nsTArray<nsString> params = {NS_ConvertUTF8toUTF16(mManifestURL)};
     ReportMessage(nsIScriptError::errorFlag, "WAICT"_ns,
                   "WAICTManifestFetchURLParseError", params);
-    mPromise->Reject(true, __func__);
+    mManifestValid = false;
+    mPromise->Resolve(true, __func__);
     return;
   }
 
@@ -362,7 +396,8 @@ void IntegrityPolicyWAICT::FetchManifest() {
     nsTArray<nsString> params = {NS_ConvertUTF8toUTF16(mManifestURL)};
     ReportMessage(nsIScriptError::errorFlag, "WAICT"_ns,
                   "WAICTManifestFetchError", params);
-    mPromise->Reject(true, __func__);
+    mManifestValid = false;
+    mPromise->Resolve(true, __func__);
   }
 }
 
