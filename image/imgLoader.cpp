@@ -3091,10 +3091,18 @@ ProxyListener::OnStopRequest(nsIRequest* aRequest, nsresult status) {
               return listener->OnStopRequest(request, status);
             },
             [listener = nsCOMPtr{mDestListener},
-             request = nsCOMPtr{aRequest}](bool) {
+             request = nsCOMPtr{aRequest}, status,
+             integrity = RefPtr{integrity}](bool) {
               MOZ_LOG(gWaictLog, LogLevel::Error,
                       ("ProxyListener::OnStopRequest -- Promise rejected\n"));
-              // return listener->OnStopRequest(request, NS_ERROR_FAILURE);
+              if (integrity->IsWaictEnforce()) {
+                // Enforce mode - block the image
+                return listener->OnStopRequest(request, NS_ERROR_FAILURE);
+              } else {
+                // Audit mode - allow but report
+                return listener->OnStopRequest(request, status);
+              }
+
             });
 
         return NS_OK;

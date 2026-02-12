@@ -92,6 +92,9 @@ class IntegrityPolicy : public nsIIntegrityPolicy,
   bool CheckHash(nsIURI* aURI, const nsACString& aHash,
                  Document* aDocument = nullptr);
 
+  // It should be public to use in loaders
+  bool IsWaictEnforce() const { return mWaictEnforce; }
+
   enum class ManifestValidationStatus : uint8_t {
     OK,
     InvalidJSON,
@@ -152,6 +155,7 @@ class IntegrityPolicy : public nsIIntegrityPolicy,
   WAICTManifest mWaictManifest;
   Destinations mWaictDestinations;
   RefPtr<WAICTManifestLoadedPromise::Private> mWAICTPromise;
+  bool mWaictEnforce = false;
 
   struct IPConsoleMsgQueueElem {
     uint32_t mErrorFlags;

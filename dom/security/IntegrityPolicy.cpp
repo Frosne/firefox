@@ -168,6 +168,41 @@ Result<IntegrityPolicy::Sources, nsresult> ParseSources(
   return result;
 }
 
+// Used for WAICT
+// Mode is mandatory, could be either enforce or report
+Result<bool, nsresult> ParseMode(nsISFVDictionary* aDict) {
+  nsCOMPtr<nsISFVItemOrInnerList> iil;
+  nsresult rv = aDict->Get("mode"_ns, getter_AddRefs(iil));
+  if (NS_FAILED(rv)) {
+    return Err(NS_ERROR_FAILURE);
+  }
+
+  nsCOMPtr<nsISFVItem> item(do_QueryInterface(iil));
+  NS_ENSURE_TRUE(item, Err(NS_ERROR_FAILURE));
+
+  nsCOMPtr<nsISFVBareItem> bareItem;
+  rv = item->GetValue(getter_AddRefs(bareItem));
+  NS_ENSURE_SUCCESS(rv, Err(rv));
+
+  nsCOMPtr<nsISFVString> stringValue(do_QueryInterface(bareItem));
+  NS_ENSURE_TRUE(stringValue, Err(NS_ERROR_FAILURE));
+
+  nsAutoCString mode;
+  rv = stringValue->GetValue(mode);
+  NS_ENSURE_SUCCESS(rv, Err(rv));
+
+  if (mode.EqualsLiteral("enforce")) {
+    return true;
+  }
+
+  if (mode.EqualsLiteral("report")) {
+    return false;
+  }
+
+  LOG("ParseMode: Invalid mode value: {}", mode.get());
+  return Err(NS_ERROR_FAILURE);
+}
+
 /* static */
 Result<IntegrityPolicy::Destinations, nsresult> ParseDestinations(
     nsISFVDictionary* aDict, bool aIsWAICT) {
@@ -339,6 +374,12 @@ bool IntegrityPolicy::CheckHash(nsIURI* aURI, const nsACString& aHash,
               "IntegrityPolicy::CheckHash aURI = {} aHash = {}",
               aURI->GetSpecOrDefault().get(), nsCString(aHash).get());
 
+  if (mHashesLookup.IsEmpty() && mAnyHashesLookup.IsEmpty()) {
+    MOZ_LOG_FMT(gWaictLog, LogLevel::Debug,
+                "IntegrityPolicy::CheckHash: No hashes in manifest");
+    return mWaictEnforce ? false : true;
+  }
+
   // First, try path-based lookup in hashes
   if (!mHashesLookup.IsEmpty()) {
     nsAutoCString path;
@@ -356,7 +397,7 @@ bool IntegrityPolicy::CheckHash(nsIURI* aURI, const nsACString& aHash,
           MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
                       "IntegrityPolicy::CheckHash: Wrong hash for path ({} != {})",
                       hashEntry.get(), nsCString(aHash).get());
-          return false;
+          return mWaictEnforce ? false : true;;
         }
 
         MOZ_LOG_FMT(gWaictLog, LogLevel::Info,
@@ -379,7 +420,7 @@ bool IntegrityPolicy::CheckHash(nsIURI* aURI, const nsACString& aHash,
 
   MOZ_LOG_FMT(gWaictLog, LogLevel::Debug,
               "IntegrityPolicy::CheckHash: Hash not found in either lookup");
-  return false;
+   return mWaictEnforce ? false : true;
 }
 
 nsresult IntegrityPolicy::ParseWaict(nsIURI* aDocumentURI,
@@ -422,6 +463,18 @@ nsresult IntegrityPolicy::ParseWaict(nsIURI* aDocumentURI,
   }
 
   mWaictDestinations = destinationsResult.unwrap();
+
+  auto modeResult = ParseMode(dict);
+  if (modeResult.isErr()) {
+    MOZ_LOG_FMT(gWaictLog, LogLevel::Warning, 
+      "ParseWaict: ParseMode failed");
+
+    nsTArray<nsString> params = {NS_ConvertUTF8toUTF16(aHeader)};
+    ReportOrQueueMessage(nsIScriptError::errorFlag, "WAICT"_ns,
+                         "WAICTHeaderModeParseError", params);
+
+    return modeResult.unwrapErr();
+  }
 
   rv = waict::ParseMaxAge(dict, &mWaictMaxAge);
   if (NS_FAILED(rv)) {
