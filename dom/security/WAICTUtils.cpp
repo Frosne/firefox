@@ -13,9 +13,11 @@ namespace mozilla::waict {
 nsresult ParseManifest(nsISFVDictionary* aDict, nsACString& outManifest) {
   nsCOMPtr<nsISFVItemOrInnerList> manifest;
   MOZ_TRY(aDict->Get("manifest"_ns, getter_AddRefs(manifest)));
+
   if (nsCOMPtr<nsISFVItem> manifestItem = do_QueryInterface(manifest)) {
     nsCOMPtr<nsISFVBareItem> value;
     MOZ_TRY(manifestItem->GetValue(getter_AddRefs(value)));
+
     if (nsCOMPtr<nsISFVString> stringVal = do_QueryInterface(value)) {
       MOZ_TRY(stringVal->GetValue(outManifest));
       if (!outManifest.IsEmpty()) {
@@ -30,9 +32,11 @@ nsresult ParseManifest(nsISFVDictionary* aDict, nsACString& outManifest) {
 nsresult ParseMaxAge(nsISFVDictionary* aDict, uint64_t* outMaxAge) {
   nsCOMPtr<nsISFVItemOrInnerList> maxAge;
   MOZ_TRY(aDict->Get("max-age"_ns, getter_AddRefs(maxAge)));
+
   if (nsCOMPtr<nsISFVItem> maxAgeItem = do_QueryInterface(maxAge)) {
     nsCOMPtr<nsISFVBareItem> maxAgeValue;
     MOZ_TRY(maxAgeItem->GetValue(getter_AddRefs(maxAgeValue)));
+
     if (nsCOMPtr<nsISFVInteger> intVal = do_QueryInterface(maxAgeValue)) {
       int64_t maxAgeSeconds;
       MOZ_TRY(intVal->GetValue(&maxAgeSeconds));
@@ -48,32 +52,24 @@ nsresult ParseMaxAge(nsISFVDictionary* aDict, uint64_t* outMaxAge) {
 
 nsresult ParseMode(nsISFVDictionary* aDict, bool* outEnforce) {
   nsCOMPtr<nsISFVItemOrInnerList> mode;
-  nsresult rv = aDict->Get("mode"_ns, getter_AddRefs(mode));
-
-  // If mode is not specified, default to audit (enforce = false)
-  if (NS_FAILED(rv) || !mode) {
-    *outEnforce = false;
-    return NS_OK;
-  }
+  MOZ_TRY(aDict->Get("mode"_ns, getter_AddRefs(mode)));
 
   if (nsCOMPtr<nsISFVItem> modeItem = do_QueryInterface(mode)) {
-    nsCOMPtr<nsISFVBareItem> value;
-    MOZ_TRY(modeItem->GetValue(getter_AddRefs(value)));
+    nsCOMPtr<nsISFVBareItem> modeValue;
+    MOZ_TRY(modeItem->GetValue(getter_AddRefs(modeValue)));
 
-    if (nsCOMPtr<nsISFVToken> tokenVal = do_QueryInterface(value)) {
+    if (nsCOMPtr<nsISFVToken> tokenVal = do_QueryInterface(modeValue)) {
       nsAutoCString token;
       MOZ_TRY(tokenVal->GetValue(token));
 
       if (token.EqualsLiteral("enforce")) {
         *outEnforce = true;
         return NS_OK;
-      } else if (token.EqualsLiteral("audit")) {
+      }
+      if (token.EqualsLiteral("audit")) {
         *outEnforce = false;
         return NS_OK;
       }
-
-      // Invalid mode value
-      return NS_ERROR_FAILURE;
     }
   }
 
