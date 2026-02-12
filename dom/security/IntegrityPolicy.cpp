@@ -394,10 +394,12 @@ bool IntegrityPolicy::CheckHash(nsIURI* aURI, const nsACString& aHash,
         nsCString hashEntry = NS_ConvertUTF16toUTF8(*hashValue);
 
         if (hashEntry != aHash) {
-          MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
-                      "IntegrityPolicy::CheckHash: Wrong hash for path ({} != {})",
-                      hashEntry.get(), nsCString(aHash).get());
-          return mWaictEnforce ? false : true;;
+          MOZ_LOG_FMT(
+              gWaictLog, LogLevel::Warning,
+              "IntegrityPolicy::CheckHash: Wrong hash for path ({} != {})",
+              hashEntry.get(), nsCString(aHash).get());
+          return mWaictEnforce ? false : true;
+          ;
         }
 
         MOZ_LOG_FMT(gWaictLog, LogLevel::Info,
@@ -420,7 +422,7 @@ bool IntegrityPolicy::CheckHash(nsIURI* aURI, const nsACString& aHash,
 
   MOZ_LOG_FMT(gWaictLog, LogLevel::Debug,
               "IntegrityPolicy::CheckHash: Hash not found in either lookup");
-   return mWaictEnforce ? false : true;
+  return mWaictEnforce ? false : true;
 }
 
 nsresult IntegrityPolicy::ParseWaict(nsIURI* aDocumentURI,
@@ -466,8 +468,7 @@ nsresult IntegrityPolicy::ParseWaict(nsIURI* aDocumentURI,
 
   auto modeResult = ParseMode(dict);
   if (modeResult.isErr()) {
-    MOZ_LOG_FMT(gWaictLog, LogLevel::Warning, 
-      "ParseWaict: ParseMode failed");
+    MOZ_LOG_FMT(gWaictLog, LogLevel::Warning, "ParseWaict: ParseMode failed");
 
     nsTArray<nsString> params = {NS_ConvertUTF8toUTF16(aHeader)};
     ReportOrQueueMessage(nsIScriptError::errorFlag, "WAICT"_ns,
@@ -577,8 +578,8 @@ IntegrityPolicy::ManifestValidationStatus IntegrityPolicy::ValidateManifest(
   }
 
   // Note: Duplicate keys in the hashes record are impossible - the JSON parser
-  // and record<> type automatically keep only the last value for duplicate keys.
-  // At least one of hashes or any_hashes must be present and non-empty
+  // and record<> type automatically keep only the last value for duplicate
+  // keys. At least one of hashes or any_hashes must be present and non-empty
   bool hasHashes = aOutManifest.mHashes.WasPassed() &&
                    !aOutManifest.mHashes.Value().Entries().IsEmpty();
   bool hasAnyHashes = aOutManifest.mAny_hashes.WasPassed() &&

@@ -12,13 +12,13 @@
 #include "mozilla/Maybe.h"
 #include "mozilla/MozPromise.h"
 #include "mozilla/dom/WAICTManifestBinding.h"
+#include "nsHashKeys.h"
 #include "nsIContentPolicy.h"
 #include "nsIIntegrityPolicy.h"
 #include "nsIStreamLoader.h"
 #include "nsTArray.h"
 #include "nsTHashMap.h"
 #include "nsTHashSet.h"
-#include "nsHashKeys.h"
 
 #define NS_INTEGRITYPOLICY_CONTRACTID "@mozilla.org/integritypolicy;1"
 
@@ -115,7 +115,6 @@ class IntegrityPolicy : public nsIIntegrityPolicy,
   nsresult ParseWaict(nsIURI* aDocumentURI, const nsACString& aHeader,
                       Document* aDocument);
   void FetchWaictManifest();
-
 
   void ReportOrQueueMessage(uint32_t aErrorFlags, const nsACString& aCategory,
                             const char* aMessageName,

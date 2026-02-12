@@ -3090,9 +3090,8 @@ ProxyListener::OnStopRequest(nsIRequest* aRequest, nsresult status) {
 
               return listener->OnStopRequest(request, status);
             },
-            [listener = nsCOMPtr{mDestListener},
-             request = nsCOMPtr{aRequest}, status,
-             integrity = RefPtr{integrity}](bool) {
+            [listener = nsCOMPtr{mDestListener}, request = nsCOMPtr{aRequest},
+             status, integrity = RefPtr{integrity}](bool) {
               MOZ_LOG(gWaictLog, LogLevel::Error,
                       ("ProxyListener::OnStopRequest -- Promise rejected\n"));
               if (integrity->IsWaictEnforce()) {
@@ -3102,7 +3101,6 @@ ProxyListener::OnStopRequest(nsIRequest* aRequest, nsresult status) {
                 // Audit mode - allow but report
                 return listener->OnStopRequest(request, status);
               }
-
             });
 
         return NS_OK;
