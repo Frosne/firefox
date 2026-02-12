@@ -482,7 +482,7 @@ ScriptLoadHandler::OnStreamComplete(nsIIncrementalStreamLoader* aLoader,
                 originalURI, computedHash, aManifestLoaded,
                 self->mScriptLoader->mDocument)) {
           MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
-                      "ScriptLoadHandler::OnStreamComplete: Hash check failed");
+                      "ScriptLoadHandler::OnStreamComplete: Wrong script hash");
           self->DoOnStreamComplete(channel, NS_ERROR_FAILURE, dataCopy.Length(),
                                    dataCopy.Elements());
           return;
@@ -490,7 +490,7 @@ ScriptLoadHandler::OnStreamComplete(nsIIncrementalStreamLoader* aLoader,
 
         MOZ_LOG_FMT(
             gWaictLog, LogLevel::Debug,
-            "ScriptLoadHandler::OnStreamComplete: Hash check passed");
+            "ScriptLoadHandler::OnStreamComplete: Correct script hash :)");
         self->DoOnStreamComplete(channel, aStatus, dataCopy.Length(),
                                  dataCopy.Elements());
       },
