@@ -3080,24 +3080,23 @@ ProxyListener::OnStopRequest(nsIRequest* aRequest, nsresult status) {
             [listener = nsCOMPtr{mDestListener}, channel,
              request = nsCOMPtr{aRequest}, status,
              integrity = RefPtr{integrity},
-             computedHash = nsCString(computedHash),
-             doc = RefPtr{doc}](bool aManifestLoaded) {
+             computedHash = nsCString(computedHash), doc = RefPtr{doc}](bool) {
               // XXX Not clear if we want to use pre-redirect URL.
               nsCOMPtr<nsIURI> originalURI;
               channel->GetOriginalURI(getter_AddRefs(originalURI));
-              if (!integrity->MaybeCheckResourceIntegrity(
-                      originalURI, computedHash, aManifestLoaded, doc)) {
+              if (!integrity->MaybeCheckResourceIntegrity(originalURI,
+                                                          computedHash, doc)) {
                 return listener->OnStopRequest(request, NS_ERROR_FAILURE);
               }
 
               return listener->OnStopRequest(request, status);
             },
-            [listener = nsCOMPtr{mDestListener},
-             request = nsCOMPtr{aRequest}](bool) {
+            [](bool) {
+              MOZ_ASSERT_UNREACHABLE("should always resolve");
               // Exceptional error (timeout, page closed, etc.) - always fail
-              MOZ_LOG(gWaictLog, LogLevel::Error,
-                      ("ProxyListener::OnStopRequest -- Promise rejected\n"));
-              return listener->OnStopRequest(request, NS_ERROR_FAILURE);
+              // MOZ_LOG(gWaictLog, LogLevel::Error,
+              //         ("ProxyListener::OnStopRequest -- Promise rejected\n"));
+              // return listener->OnStopRequest(request, NS_ERROR_FAILURE);
             });
 
         return NS_OK;

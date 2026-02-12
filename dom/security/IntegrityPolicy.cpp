@@ -370,14 +370,13 @@ IntegrityPolicy::WaitForManifestLoad() {
 
 bool IntegrityPolicy::MaybeCheckResourceIntegrity(nsIURI* aURI,
                                                   const nsACString& aHash,
-                                                  bool aManifestLoaded,
                                                   Document* aDocument) {
   MOZ_LOG_FMT(gWaictLog, LogLevel::Debug,
               "IntegrityPolicy::MaybeCheckResourceIntegrity aURI = {} aHash = {}",
               aURI->GetSpecOrDefault().get(), nsCString(aHash).get());
 
-  // If manifest failed to load, decision depends on mode
-  if (!aManifestLoaded) {
+  // If manifest failed to load/validate, decision depends on mode
+  if (!mManifestValid) {
     if (mWaictEnforce) {
       MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
                   "IntegrityPolicy::MaybeCheckResourceIntegrity: Manifest not "
@@ -649,7 +648,8 @@ NS_IMETHODIMP IntegrityPolicy::OnStreamComplete(nsIStreamLoader* aLoader,
 
   if (NS_FAILED(aStatus)) {
     // Manifest fetch failed
-    mWAICTPromise->Resolve(false, __func__);
+    mManifestValid = false;
+    mWAICTPromise->Resolve(true, __func__);
     return NS_OK;
   }
 
@@ -662,7 +662,8 @@ NS_IMETHODIMP IntegrityPolicy::OnStreamComplete(nsIStreamLoader* aLoader,
                 "Failed to validate WAICT manifest, error= {}",
                 static_cast<uint8_t>(status));
     // Manifest validation failed
-    mWAICTPromise->Resolve(false, __func__);
+    mManifestValid = false;
+    mWAICTPromise->Resolve(true, __func__);
     return NS_OK;
   }
 
@@ -704,6 +705,7 @@ NS_IMETHODIMP IntegrityPolicy::OnStreamComplete(nsIStreamLoader* aLoader,
 
   MOZ_LOG_FMT(gWaictLog, LogLevel::Info, "Got manifest, version={}",
               mWaictManifest.mVersion);
+  mManifestValid = true;
   mWAICTPromise->Resolve(true, __func__);
   return NS_OK;
 }
@@ -726,7 +728,8 @@ void IntegrityPolicy::FetchWaictManifest() {
     ReportOrQueueMessage(nsIScriptError::errorFlag, "WAICT"_ns,
                          "WAICTManifestFetchURLParseError", params);
     // URL parse error
-    mWAICTPromise->Resolve(false, __func__);
+    mManifestValid = false;
+    mWAICTPromise->Resolve(true, __func__);
     return;
   }
 
@@ -744,7 +747,8 @@ void IntegrityPolicy::FetchWaictManifest() {
     ReportOrQueueMessage(nsIScriptError::errorFlag, "WAICT"_ns,
                          "WAICTManifestFetchError", params);
     // Fetch error
-    mWAICTPromise->Resolve(false, __func__);
+    mManifestValid = false;
+    mWAICTPromise->Resolve(true, __func__);
   }
 }
 

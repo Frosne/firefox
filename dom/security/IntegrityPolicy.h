@@ -90,7 +90,6 @@ class IntegrityPolicy : public nsIIntegrityPolicy,
   RefPtr<WAICTManifestLoadedPromise> WaitForManifestLoad();
 
   bool MaybeCheckResourceIntegrity(nsIURI* aURI, const nsACString& aHash,
-                                   bool aManifestLoaded,
                                    Document* aDocument = nullptr);
 
   // It should be public to use in loaders
@@ -156,6 +155,7 @@ class IntegrityPolicy : public nsIIntegrityPolicy,
   Destinations mWaictDestinations;
   RefPtr<WAICTManifestLoadedPromise::Private> mWAICTPromise;
   bool mWaictEnforce = false;
+  bool mManifestValid = false;
 
   struct IPConsoleMsgQueueElem {
     uint32_t mErrorFlags;
