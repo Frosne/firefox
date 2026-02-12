@@ -477,8 +477,8 @@ ScriptLoadHandler::OnStreamComplete(nsIIncrementalStreamLoader* aLoader,
         // XXX Not clear if we want to use pre-redirect URL.
         nsCOMPtr<nsIURI> originalURI;
         channel->GetOriginalURI(getter_AddRefs(originalURI));
-        if (!integrity->CheckHash(originalURI, computedHash,
-                                  self->mScriptLoader->mDocument)) {
+        if (!integrity->MaybeCheckResourceIntegrity(
+                originalURI, computedHash, self->mScriptLoader->mDocument)) {
           MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
                       "ScriptLoadHandler::OnStreamComplete: Wrong script hash");
           self->DoOnStreamComplete(channel, NS_ERROR_FAILURE, dataCopy.Length(),

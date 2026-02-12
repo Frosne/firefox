@@ -38,8 +38,8 @@ class IntegrityPolicyWAICT : public nsIStreamLoaderObserver {
       MozPromise<bool, bool, /* IsExclusive */ false>;
   RefPtr<WAICTManifestLoadedPromise> WaitForManifestLoad();
 
-  bool CheckHash(nsIURI* aURI, const nsACString& aHash,
-                 Document* aDocument = nullptr);
+  bool MaybeCheckResourceIntegrity(nsIURI* aURI, const nsACString& aHash,
+                                   Document* aDocument = nullptr);
 
   enum class ManifestValidationStatus : uint8_t {
     OK,
@@ -75,6 +75,8 @@ class IntegrityPolicyWAICT : public nsIStreamLoaderObserver {
   WAICTManifest mManifest;
   IntegrityPolicy::Destinations mDestinations;
   RefPtr<WAICTManifestLoadedPromise::Private> mPromise;
+  bool mEnforce = false;
+  bool mManifestValid = false;
   nsTHashMap<nsString, nsString> mHashesLookup;
   nsTHashSet<nsString> mAnyHashesLookup;
 

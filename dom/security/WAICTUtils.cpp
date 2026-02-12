@@ -46,4 +46,38 @@ nsresult ParseMaxAge(nsISFVDictionary* aDict, uint64_t* outMaxAge) {
   return NS_ERROR_FAILURE;
 }
 
+nsresult ParseMode(nsISFVDictionary* aDict, bool* outEnforce) {
+  nsCOMPtr<nsISFVItemOrInnerList> mode;
+  nsresult rv = aDict->Get("mode"_ns, getter_AddRefs(mode));
+
+  // If mode is not specified, default to audit (enforce = false)
+  if (NS_FAILED(rv) || !mode) {
+    *outEnforce = false;
+    return NS_OK;
+  }
+
+  if (nsCOMPtr<nsISFVItem> modeItem = do_QueryInterface(mode)) {
+    nsCOMPtr<nsISFVBareItem> value;
+    MOZ_TRY(modeItem->GetValue(getter_AddRefs(value)));
+
+    if (nsCOMPtr<nsISFVToken> tokenVal = do_QueryInterface(value)) {
+      nsAutoCString token;
+      MOZ_TRY(tokenVal->GetValue(token));
+
+      if (token.EqualsLiteral("enforce")) {
+        *outEnforce = true;
+        return NS_OK;
+      } else if (token.EqualsLiteral("audit")) {
+        *outEnforce = false;
+        return NS_OK;
+      }
+
+      // Invalid mode value
+      return NS_ERROR_FAILURE;
+    }
+  }
+
+  return NS_ERROR_FAILURE;
+}
+
 }  // namespace mozilla::waict
