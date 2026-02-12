@@ -503,40 +503,23 @@ static bool ValidateHashValue(const nsAString& aHash) {
   return true;
 }
 
-bool ValidateHashes(const Record<nsString, nsString>& aHashes) {
-  for (const auto& entry : aHashes.Entries()) {
-    if (entry.mKey.IsEmpty() || entry.mValue.IsEmpty() ||
-        !ValidateHashValue(entry.mValue)) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
-bool ValidateAnyHashes(const Sequence<nsString>& aAnyHashes) {
-  for (const auto& hash : aAnyHashes) {
-    if (hash.IsEmpty() || !ValidateHashValue(hash)) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
-IntegrityPolicy::ManifestValidationStatus
-IntegrityPolicy::ValidateManifest(const nsACString& aManifestJSON,
-                                          WAICTManifest& aOutManifest) {
+IntegrityPolicy::ManifestValidationStatus IntegrityPolicy::ValidateManifest(
+    const nsACString& aManifestJSON, WAICTManifest& aOutManifest,
+    IntegrityPolicy* aPolicy) {
   if (!aOutManifest.Init(NS_ConvertUTF8toUTF16(aManifestJSON))) {
-    // ReportOrQueueMessage(nsIScriptError::errorFlag, "WAICT"_ns,
-    //                      "WAICTManifestJSONParseError", {});
+    if (aPolicy) {
+      aPolicy->ReportOrQueueMessage(nsIScriptError::errorFlag, "WAICT"_ns,
+                                    "WAICTManifestJSONParseError", {});
+    }
     return ManifestValidationStatus::InvalidJSON;
   }
 
   // Only the version 1 is supported for now.
   if (aOutManifest.mVersion != 1) {
-    // ReportOrQueueMessage(nsIScriptError::errorFlag, "WAICT"_ns,
-    //                      "WAICTManifestJSONParseError", {});
+    if (aPolicy) {
+      aPolicy->ReportOrQueueMessage(nsIScriptError::errorFlag, "WAICT"_ns,
+                                    "WAICTManifestWrongVersion", {});
+    }
     return ManifestValidationStatus::InvalidVersion;
   }
 
@@ -552,14 +535,33 @@ IntegrityPolicy::ValidateManifest(const nsACString& aManifestJSON,
     return ManifestValidationStatus::MissingHashes;
   }
 
-  // Validate hashes if present
-  if (hasHashes && !ValidateHashes(aOutManifest.mHashes.Value())) {
-    return ManifestValidationStatus::InvalidHashFormat;
+  if (hasHashes) {
+    for (const auto& entry : aOutManifest.mHashes.Value().Entries()) {
+      if (entry.mKey.IsEmpty() || entry.mValue.IsEmpty() ||
+          !ValidateHashValue(entry.mValue)) {
+        if (aPolicy) {
+          nsTArray<nsString> params = {entry.mKey, entry.mValue};
+          aPolicy->ReportOrQueueMessage(nsIScriptError::errorFlag, "WAICT"_ns,
+                                        "WAICTManifestInvalidHash", params);
+        }
+
+        return ManifestValidationStatus::InvalidHashFormat;
+      }
+    }
   }
 
-  // Validate any_hashes if present
-  if (hasAnyHashes && !ValidateAnyHashes(aOutManifest.mAny_hashes.Value())) {
-    return ManifestValidationStatus::InvalidHashFormat;
+  if (hasAnyHashes) {
+    for (const auto& hash : aOutManifest.mAny_hashes.Value()) {
+      if (hash.IsEmpty() || !ValidateHashValue(hash)) {
+        if (aPolicy) {
+          nsTArray<nsString> params = {hash};
+          aPolicy->ReportOrQueueMessage(nsIScriptError::errorFlag, "WAICT"_ns,
+                                        "WAICTManifestInvalidAnyHash", params);
+        }
+
+        return ManifestValidationStatus::InvalidHashFormat;
+      }
+    }
   }
 
   return ManifestValidationStatus::OK;
@@ -580,7 +582,8 @@ NS_IMETHODIMP IntegrityPolicy::OnStreamComplete(nsIStreamLoader* aLoader,
 
   // We can move this to ValidateManifest if we want.
   nsDependentCSubstring data(reinterpret_cast<const char*>(aData), aDataLen);
-  ManifestValidationStatus status = ValidateManifest(data, mWaictManifest);
+  ManifestValidationStatus status =
+      ValidateManifest(data, mWaictManifest, this);
   if (status != ManifestValidationStatus::OK) {
     MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
                 "Failed to validate WAICT manifest, error= {}",
