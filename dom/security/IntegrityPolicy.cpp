@@ -199,7 +199,7 @@ Result<bool, nsresult> ParseMode(nsISFVDictionary* aDict) {
     return false;
   }
 
-  LOG("ParseMode: Invalid mode value: {}", mode.get());
+  MOZ_LOG_FMT(gWaictLog, LogLevel::Warning, "ParseMode: parsing has failed");
   return Err(NS_ERROR_FAILURE);
 }
 
