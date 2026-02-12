@@ -120,7 +120,9 @@ nsresult IntegrityPolicyWAICT::Create(Document* aDocument,
 
   RefPtr<IntegrityPolicyWAICT> policy = new IntegrityPolicyWAICT(aDocument);
 
-  MOZ_TRY(policy->ParseHeader(aHeader));
+  // We can't propagate the error here, because we would never flush
+  // the console messages.
+  (void)policy->ParseHeader(aHeader);
   policy->FetchManifest();
 
   policy.forget(aPolicy);
@@ -137,7 +139,7 @@ nsresult IntegrityPolicyWAICT::ParseHeader(const nsACString& aHeader) {
   nsresult rv = sfv->ParseDictionary(aHeader, getter_AddRefs(dict));
   if (NS_FAILED(rv)) {
     MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
-                "IntegrityPolicyWAICT::Initialize: ParseDictionary failed");
+                "ParseHeader: ParseDictionary failed");
 
     nsTArray<nsString> params = {NS_ConvertUTF8toUTF16(aHeader)};
     ReportMessage(nsIScriptError::errorFlag, "WAICT"_ns,
@@ -148,7 +150,7 @@ nsresult IntegrityPolicyWAICT::ParseHeader(const nsACString& aHeader) {
   auto destinationsResult = ParseDestinations(dict, /* aIsWAICT */ true);
   if (destinationsResult.isErr()) {
     MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
-                "IntegrityPolicyWAICT::Initialize: ParseDestinations failed");
+                "ParseHeader: ParseDestinations failed");
 
     nsTArray<nsString> params = {NS_ConvertUTF8toUTF16(aHeader)};
     ReportMessage(nsIScriptError::errorFlag, "WAICT"_ns,
@@ -162,7 +164,7 @@ nsresult IntegrityPolicyWAICT::ParseHeader(const nsACString& aHeader) {
   rv = waict::ParseMaxAge(dict, &mMaxAge);
   if (NS_FAILED(rv)) {
     MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
-                "IntegrityPolicyWAICT::Initialize: waict::ParseMaxAge failed");
+                "ParseHeader: waict::ParseMaxAge failed");
 
     nsTArray<nsString> params = {NS_ConvertUTF8toUTF16(aHeader)};
     ReportMessage(nsIScriptError::errorFlag, "WAICT"_ns,
@@ -171,27 +173,28 @@ nsresult IntegrityPolicyWAICT::ParseHeader(const nsACString& aHeader) {
     return rv;
   }
 
-  rv = waict::ParseManifest(dict, mManifestURL);
+  rv = waict::ParseMode(dict, &mEnforce);
   if (NS_FAILED(rv)) {
-    MOZ_LOG_FMT(
-        gWaictLog, LogLevel::Warning,
-        "IntegrityPolicyWAICT::Initialize: waict::ParseManifest failed");
+    MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
+                "ParseHeader: waict::ParseMode failed");
 
     nsTArray<nsString> params = {NS_ConvertUTF8toUTF16(aHeader)};
     ReportMessage(nsIScriptError::errorFlag, "WAICT"_ns,
-                  "WAICTHeaderManifestParseError", params);
+                  "WAICTHeaderModeParseError", params);
 
     return rv;
   }
 
-  rv = waict::ParseMode(dict, &mEnforce);
+  // Make sure this is the last step. We use the existence of the manifest URL
+  // as a trigger to activate WAICT.
+  rv = waict::ParseManifest(dict, mManifestURL);
   if (NS_FAILED(rv)) {
     MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
-                "IntegrityPolicyWAICT::Initialize: waict::ParseMode failed");
+                "ParseHeader: waict::ParseManifest failed");
 
     nsTArray<nsString> params = {NS_ConvertUTF8toUTF16(aHeader)};
     ReportMessage(nsIScriptError::errorFlag, "WAICT"_ns,
-                  "WAICTHeaderInvalidMode", params);
+                  "WAICTHeaderManifestParseError", params);
 
     return rv;
   }
