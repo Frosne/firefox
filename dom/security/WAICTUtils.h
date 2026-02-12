@@ -17,6 +17,8 @@ nsresult ParseManifest(nsISFVDictionary* aDict, nsACString& outManifest);
 
 nsresult ParseMaxAge(nsISFVDictionary* aDict, uint64_t* outMaxAge);
 
+nsresult ParseMode(nsISFVDictionary* aDict, bool* outEnforce);
+
 }  // namespace waict
 
 }  // namespace mozilla

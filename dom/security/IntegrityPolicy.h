@@ -12,13 +12,12 @@
 #include "mozilla/Maybe.h"
 #include "mozilla/MozPromise.h"
 #include "mozilla/dom/WAICTManifestBinding.h"
-#include "nsHashKeys.h"
 #include "nsIContentPolicy.h"
 #include "nsIIntegrityPolicy.h"
-#include "nsIStreamLoader.h"
 #include "nsTArray.h"
 #include "nsTHashMap.h"
 #include "nsTHashSet.h"
+#include "nsHashKeys.h"
 
 #define NS_INTEGRITYPOLICY_CONTRACTID "@mozilla.org/integritypolicy;1"
 
@@ -33,23 +32,17 @@ namespace dom {
 
 class Document;
 
-class IntegrityPolicy : public nsIIntegrityPolicy,
-                        public nsIStreamLoaderObserver {
+class IntegrityPolicy : public nsIIntegrityPolicy {
  public:
   NS_DECL_ISUPPORTS
   NS_DECL_NSISERIALIZABLE
   NS_DECL_NSIINTEGRITYPOLICY
-  NS_DECL_NSISTREAMLOADEROBSERVER
 
   IntegrityPolicy() = default;
 
   static nsresult ParseHeaders(const nsACString& aHeader,
                                const nsACString& aHeaderRO,
-                               const nsACString& aWaict, nsIURI* aDocumentURI,
-                               IntegrityPolicy** aPolicy,
-                               Document* aDocument = nullptr);
-
-  void FlushConsoleMessages();
+                               IntegrityPolicy** aPolicy);
 
   enum class SourceType : uint8_t { Inline };
 
@@ -83,43 +76,10 @@ class IntegrityPolicy : public nsIIntegrityPolicy,
   static bool Equals(const IntegrityPolicy* aPolicy,
                      const IntegrityPolicy* aOtherPolicy);
 
-  bool HasWaictFor(DestinationType aDestination);
-
-  using WAICTManifestLoadedPromise =
-      MozPromise<bool, bool, /* IsExclusive */ false>;
-  RefPtr<WAICTManifestLoadedPromise> WaitForManifestLoad();
-
-  bool MaybeCheckResourceIntegrity(nsIURI* aURI, const nsACString& aHash,
-                                   Document* aDocument = nullptr);
-
-  // It should be public to use in loaders
-  bool IsWaictEnforce() const { return mWaictEnforce; }
-
-  enum class ManifestValidationStatus : uint8_t {
-    OK,
-    InvalidJSON,
-    MissingVersion,
-    InvalidVersion,
-    MissingHashes,
-    InvalidHashFormat
-  };
-
-  static ManifestValidationStatus ValidateManifest(
-      const nsACString& aManifestJSON, WAICTManifest& aOutManifest,
-      IntegrityPolicy* aPolicy = nullptr);
-
  protected:
-  virtual ~IntegrityPolicy();
+  virtual ~IntegrityPolicy() = default;
 
  private:
-  nsresult ParseWaict(nsIURI* aDocumentURI, const nsACString& aHeader,
-                      Document* aDocument);
-  void FetchWaictManifest();
-
-  void ReportOrQueueMessage(uint32_t aErrorFlags, const nsACString& aCategory,
-                            const char* aMessageName,
-                            const nsTArray<nsString>& aParams);
-
   class Entry final {
    public:
     Entry(Sources aSources, Destinations aDestinations,
@@ -145,30 +105,6 @@ class IntegrityPolicy : public nsIIntegrityPolicy,
 
   Maybe<Entry> mEnforcement;
   Maybe<Entry> mReportOnly;
-
-  nsCOMPtr<nsIURI> mDocumentURI;
-  RefPtr<Document> mDocument;
-  nsCString mWaictManifestURL;
-  uint64_t mWaictMaxAge = 0;
-  // XXX We should not use this directly.
-  WAICTManifest mWaictManifest;
-  Destinations mWaictDestinations;
-  RefPtr<WAICTManifestLoadedPromise::Private> mWAICTPromise;
-  bool mWaictEnforce = false;
-  bool mManifestValid = false;
-
-  struct IPConsoleMsgQueueElem {
-    uint32_t mErrorFlags;
-    nsCString mCategory;
-    nsCString mMessageName;
-    nsTArray<nsString> mParams;
-  };
-
-  bool mQueueUpMessages = true;
-  nsTArray<IPConsoleMsgQueueElem> mConsoleMsgQueue;
-  // Hash tables for O(1) lookup performance with large manifests
-  nsTHashMap<nsString, nsString> mHashesLookup;
-  nsTHashSet<nsString> mAnyHashesLookup;
 };
 
 }  // namespace dom
