@@ -470,7 +470,7 @@ ScriptLoadHandler::OnStreamComplete(nsIIncrementalStreamLoader* aLoader,
       GetCurrentSerialEventTarget(), __func__,
       [self = RefPtr{this}, channel, integrity = RefPtr{integrity},
        context = nsCOMPtr{aContext}, aStatus, dataCopy = std::move(dataCopy),
-       computedHash = nsCString(computedHash)](bool) {
+       computedHash = nsCString(computedHash)](bool aManifestLoaded) {
         MOZ_LOG_FMT(gWaictLog, LogLevel::Debug,
                     "ScriptLoadHandler::OnStreamComplete: WaitForManifestLoad "
                     "promise resolved");
@@ -478,10 +478,11 @@ ScriptLoadHandler::OnStreamComplete(nsIIncrementalStreamLoader* aLoader,
         // XXX Not clear if we want to use pre-redirect URL.
         nsCOMPtr<nsIURI> originalURI;
         channel->GetOriginalURI(getter_AddRefs(originalURI));
-        if (!integrity->CheckHash(originalURI, computedHash,
-                                  self->mScriptLoader->mDocument)) {
+        if (!integrity->MaybeCheckResourceIntegrity(
+                originalURI, computedHash, aManifestLoaded,
+                self->mScriptLoader->mDocument)) {
           MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
-                      "ScriptLoadHandler::OnStreamComplete: Wrong script hash");
+                      "ScriptLoadHandler::OnStreamComplete: Hash check failed");
           self->DoOnStreamComplete(channel, NS_ERROR_FAILURE, dataCopy.Length(),
                                    dataCopy.Elements());
           return;
@@ -489,7 +490,7 @@ ScriptLoadHandler::OnStreamComplete(nsIIncrementalStreamLoader* aLoader,
 
         MOZ_LOG_FMT(
             gWaictLog, LogLevel::Debug,
-            "ScriptLoadHandler::OnStreamComplete: Correct script hash :)");
+            "ScriptLoadHandler::OnStreamComplete: Hash check passed");
         self->DoOnStreamComplete(channel, aStatus, dataCopy.Length(),
                                  dataCopy.Elements());
       },

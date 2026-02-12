@@ -89,8 +89,9 @@ class IntegrityPolicy : public nsIIntegrityPolicy,
       MozPromise<bool, bool, /* IsExclusive */ false>;
   RefPtr<WAICTManifestLoadedPromise> WaitForManifestLoad();
 
-  bool CheckHash(nsIURI* aURI, const nsACString& aHash,
-                 Document* aDocument = nullptr);
+  bool MaybeCheckResourceIntegrity(nsIURI* aURI, const nsACString& aHash,
+                                   bool aManifestLoaded,
+                                   Document* aDocument = nullptr);
 
   // It should be public to use in loaders
   bool IsWaictEnforce() const { return mWaictEnforce; }
