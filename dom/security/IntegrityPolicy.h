@@ -102,7 +102,8 @@ class IntegrityPolicy : public nsIIntegrityPolicy,
   };
 
   static ManifestValidationStatus ValidateManifest(
-      const nsACString& aManifestJSON, WAICTManifest& aOutManifest);
+      const nsACString& aManifestJSON, WAICTManifest& aOutManifest,
+      IntegrityPolicy* aPolicy = nullptr);
 
  protected:
   virtual ~IntegrityPolicy();
