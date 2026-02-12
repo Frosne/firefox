@@ -70,6 +70,13 @@ bool IntegrityPolicyWAICT::MaybeCheckResourceIntegrity(
                       "IntegrityPolicyWAICT::MaybeCheckResourceIntegrity: Wrong hash for path "
                       "({} != {})",
                       *hashValue, nsCString(aHash));
+
+          nsCString spec = aURI->GetSpecOrDefault();
+          nsTArray<nsString> params = {NS_ConvertUTF8toUTF16(spec),
+                                       NS_ConvertUTF8toUTF16(*hashValue),
+                                       NS_ConvertUTF8toUTF16(aHash)};
+          ReportMessage(nsIScriptError::errorFlag, "WAICT"_ns,
+                        "WAICTManifestInvalidHash", params);
           return false;
         }
 
@@ -92,6 +99,12 @@ bool IntegrityPolicyWAICT::MaybeCheckResourceIntegrity(
   MOZ_LOG_FMT(gWaictLog, LogLevel::Debug,
               "IntegrityPolicyWAICT::MaybeCheckResourceIntegrity: Hash not found in either "
               "lookup");
+
+  nsCString spec = aURI->GetSpecOrDefault();
+  nsTArray<nsString> params = {NS_ConvertUTF8toUTF16(spec),
+                               NS_ConvertUTF8toUTF16(aHash)};
+  ReportMessage(nsIScriptError::errorFlag, "WAICT"_ns,
+                "WAICTResourceNotInManifest", params);
   return false;
 }
 
