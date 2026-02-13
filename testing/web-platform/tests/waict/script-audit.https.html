@@ -18,7 +18,7 @@
       
       promise_test(async t => {
         // See script-audit.html
-        const reports = setupIntegrityViolationObserver(t);
+        setupIntegrityViolationObserver(t);
         
         const result = await loadScriptInIframe(
           'resources/iframe-with-policy-enforce.html',
@@ -29,13 +29,13 @@
         assert_true(result.ran, 'Script should execute (window.ran should be true)');
         
         // No reports should be generated for correct hash
-        assert_equals(reports.length, 0, 'Script run should not cause any report to be generated');
+        assert_equals(result.reports.length, 0, 'Script run should not cause any report to be generated');
       }, 'Script with correct hash should load without generating reports (enforce mode)');
         
         // Test 2: Script with an incorrect hash in hashes is executed.
         // Test should return WAICTHashMismatch
       promise_test(async t => {
-        const reports = setupIntegrityViolationObserver(t);
+        setupIntegrityViolationObserver(t);
         const result = await loadScriptInIframe(
           'resources/iframe-with-policy-enforce.html',
           'incorrect.js'
@@ -44,18 +44,12 @@
         assert_false(result.loaded, 'Script should be blocked in enforce mode when hash does not match');
         assert_false(result.ran, 'Script should not execute when blocked');
         
-        
-        // Wait a bit for reports to be generated
-        await new Promise(resolve => t.step_timeout(resolve, 100));
-        
         // Check integrity violation reports
-        checkIntegrityViolationReport(reports, 'incorrect.js', false);
+        checkIntegrityViolationReport(result.reports, 'incorrect.js', false);
       }, 'Script with incorrect hash should fail to load (enforce mode)');
       
       // Test 3: Script with correct hash in any_hashes
       promise_test(async t => {
-        const reports = setupIntegrityViolationObserver(t);
-        
         const result = await loadScriptInIframe(
           'resources/iframe-with-policy-enforce.html',
           'correct_wildcards.js'
@@ -65,14 +59,12 @@
         assert_true(result.ran, 'Script should execute');
         
         // No reports should be generated for correct hash in any_hashes
-        assert_equals(reports.length, 0, 'Should not generate any integrity violation reports for hash in any_hashes');
+        assert_equals(result.reports.length, 0, 'Should not generate any integrity violation reports for hash in any_hashes');
       }, 'Script with hash in any_hashes should load successfully (enforce mode)');
         
         // Test 4: Script with incorrect hash in any_hashes
         // Test should return WAICTHashMismatch
       promise_test(async t => {
-        const reports = setupIntegrityViolationObserver(t);
-        
         const result = await loadScriptInIframe(
           'resources/iframe-with-policy-enforce.html',
           'incorrect_wildcards.js'
@@ -80,19 +72,13 @@
         
         assert_false(result.loaded, 'Script should be blocked when hash in any_hashes does not match');
         assert_false(result.ran, 'Script should not execute when blocked');
-        
-        // Wait a bit for reports to be generated
-        await new Promise(resolve => t.step_timeout(resolve, 100));
-        
         // Check integrity violation reports
-        checkIntegrityViolationReport(reports, 'incorrect_wildcards.js', false);
+        checkIntegrityViolationReport(result.reports, 'incorrect_wildcards.js', false);
       }, 'Script with wrong hash in any_hashes should fail to load (enforce mode)');
       
       // Test 5: Script not in manifest at all
       // Test should return WAICTResourceNotInManifest.
       promise_test(async t => {
-        const reports = setupIntegrityViolationObserver(t);
-        
         const result = await loadScriptInIframe(
           'resources/iframe-with-policy-enforce.html',
           'no_hash.js'
@@ -100,12 +86,8 @@
         
         assert_false(result.loaded, 'Script should be blocked when not in manifest');
         assert_false(result.ran, 'Script should not execute when blocked');
-        
-        // Wait a bit for reports to be generated
-        await new Promise(resolve => t.step_timeout(resolve, 100));
-        
         // Check integrity violation reports
-        checkIntegrityViolationReport(reports, 'no_hash.js', false);
+        checkIntegrityViolationReport(result.reports, 'no_hash.js', false);
       }, 'Script not in manifest should fail to load (enforce mode)');
 
      // Test 6: Script with broken manifest (missing integrity-policy field)
@@ -118,7 +100,7 @@
      // }
      // TODO: Add error code
     promise_test(async t => {
-      const reports = setupIntegrityViolationObserver(t);
+      setupIntegrityViolationObserver(t);
 
       const result = await loadScriptInIframe(
         'resources/iframe-with-no-integrity-policy-enforce.html',
@@ -132,7 +114,7 @@
       await new Promise(resolve => t.step_timeout(resolve, 100));
 
       // Check integrity violation reports
-      checkIntegrityViolationReport(reports, 'correct.js', false);
+      checkIntegrityViolationReport(result.reports, 'correct.js', false);
     }, 'Script should load but generate violation when manifest is missing integrity-policy (enforce mode)');
 
     // Test 7: Script with malformed header (missing mode parameter)
@@ -140,7 +122,7 @@
     // Missing required field "mode"
     // TODO: Add error code
     promise_test(async t => {
-      const reports = setupIntegrityViolationObserver(t);
+      setupIntegrityViolationObserver(t);
 
       const result = await loadScriptInIframe(
         'resources/iframe-with-no-mode.html',
@@ -154,7 +136,7 @@
       await new Promise(resolve => t.step_timeout(resolve, 100));
 
       // Check integrity violation reports
-      checkIntegrityViolationReport(reports, 'correct.js', false);
+      checkIntegrityViolationReport(result.reports, 'correct.js', false);
       }, 'Script should load but generate violation when header is missing a field');
    </script>
 </body>

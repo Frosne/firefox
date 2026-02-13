@@ -1,13 +1,21 @@
 // Helper functions for WAICT tests
 
 // Helper function to set up ReportingObserver for integrity violations
-function setupIntegrityViolationObserver(t) {
+// Used by image tests (resources loaded in main document)
+// For script tests, ReportingObserver is set up inside iframes
+// Pass t (test object) if you want cleanup, omit for no cleanup (e.g., in iframes)
+function setupIntegrityViolationObserver(t = null) {
   const reports = [];
   const observer = new ReportingObserver((reportList) => {
     reports.push(...reportList);
   }, {types: ['integrity-violation']});
   observer.observe();
-  t.add_cleanup(() => observer.disconnect());
+  // Cleanup is needed for image tests to prevent observers from previous tests
+  // interfering with subsequent tests. Not needed for iframes since they're
+  // destroyed after each test.
+  if (t && t.add_cleanup) {
+    t.add_cleanup(() => observer.disconnect());
+  }
   return reports;
 }
 
