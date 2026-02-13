@@ -285,7 +285,7 @@ struct JS_PUBLIC_API JSContext : public JS::RootingContext,
   /* Clear the pending exception (if any) due to OOM. */
   void recoverFromOutOfMemory();
 
-  void reportAllocationOverflow();
+  void reportAllocOverflow();
 
   // Accessors for immutable runtime data.
   JSAtomState& names() { return *runtime_->commonNames; }
@@ -1026,6 +1026,10 @@ struct JS_PUBLIC_API JSContext : public JS::RootingContext,
   // eval() and Function() calls or not. This flag can be set when
   // evaluating the code for Debugger.Frame.prototype.eval.
   js::ContextData<bool> bypassCSPForDebugger;
+
+  // Set to true if a global lexical was initialized by the debugger using
+  // forceLexicalInitializationByName.
+  js::ContextData<bool> hasDebuggerForcedLexicalInit;
 
   // Debugger having set `exclusiveDebuggerOnEval` property to true
   // want their evaluations and calls to be ignore by all other Debuggers

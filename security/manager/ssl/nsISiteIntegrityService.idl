@@ -16,9 +16,9 @@ interface nsIURI;
 interface nsISiteIntegrityService : nsISupports
 {
     [noscript, must_use]
-    void processHeader(in nsIURI aSourceURI,
-                       in ACString aHeader,
-                       in const_OriginAttributesRef aOriginAttributes);
+    void setProtected(in nsIURI aSourceURI,
+                      in const_OriginAttributesRef aOriginAttributes,
+                      in uint64_t aMaxAge);
 
     [noscript, must_use]
     boolean isProtectedURI(in nsIURI aSourceURI,

@@ -37,7 +37,7 @@
 #include "mozilla/dom/FetchPriority.h"
 #include "mozilla/dom/nsMixedContentBlocker.h"
 #include "mozilla/dom/PolicyContainer.h"
-#include "mozilla/dom/IntegrityPolicy.h"
+#include "mozilla/dom/IntegrityPolicyWAICT.h"
 #include "mozilla/image/ImageMemoryReporter.h"
 #include "mozilla/layers/CompositorManagerChild.h"
 #include "nsCOMPtr.h"
@@ -1942,7 +1942,7 @@ void imgLoader::NotifyObserversForCachedImage(
     newChannel->SetContentType(nsDependentCString(request->GetMimeType()));
     RefPtr<mozilla::image::Image> image = request->GetImage();
     if (image) {
-      newChannel->SetContentLength(aEntry->GetDataSize());
+      newChannel->SetContentLength(request->GetContentLength());
     }
     obsService->NotifyObservers(newChannel, "http-on-resource-cache-response",
                                 nullptr);
@@ -3048,21 +3048,18 @@ ProxyListener::OnStopRequest(nsIRequest* aRequest, nsresult status) {
       return mDestListener->OnStopRequest(aRequest, status);
     }
 
-    nsAutoCString computedHash;
-    if (imgReq->GetResourceHasher()) {
-      imgReq->GetResourceHasher()->Finish();
-      computedHash = imgReq->GetResourceHasher()->GetHash();
-      if (computedHash.IsEmpty()) {
-        MOZ_LOG(gWaictLog, LogLevel::Error,
-                ("[this=%p] ProxyListener::OnStopRequest -- "
-                 "No computed hash available\n",
-                 this));
-        return mDestListener->OnStopRequest(aRequest, NS_ERROR_FAILURE);
-      }
-    } else {
+    RefPtr<mozilla::dom::ResourceHasher> hasher = imgReq->GetResourceHasher();
+    if (!hasher) {
+      // No hasher means we don't need to enforce WAICT.
+      return mDestListener->OnStopRequest(aRequest, status);
+    }
+
+    hasher->Finish();
+    const nsACString& computedHash = hasher->GetHash();
+    if (computedHash.IsEmpty()) {
       MOZ_LOG(gWaictLog, LogLevel::Error,
               ("[this=%p] ProxyListener::OnStopRequest -- "
-               "No resource hasher\n",
+               "No computed hash available\n",
                this));
       return mDestListener->OnStopRequest(aRequest, NS_ERROR_FAILURE);
     }
@@ -3073,40 +3070,35 @@ ProxyListener::OnStopRequest(nsIRequest* aRequest, nsresult status) {
     }
 
     if (doc) {
-      if (auto* integrity = IntegrityPolicy::Cast(
-              PolicyContainer::GetIntegrityPolicy(doc->GetPolicyContainer()))) {
-        if (integrity->HasWaictFor(IntegrityPolicy::DestinationType::Image)) {
-          printf("ProxyListener::OnStopRequest: Waiting for load");
-          integrity->WaitForManifestLoad()->Then(
-              GetCurrentSerialEventTarget(), __func__,
-              [listener = nsCOMPtr{mDestListener}, channel,
-               request = nsCOMPtr{aRequest}, status,
-               integrity = RefPtr{integrity},
-               computedHash = nsCString(computedHash),
-               doc = RefPtr{doc}](bool) {
-                printf("ProxyListener::OnStopRequest: Promise resolved\n");
+      if (auto* policy = PolicyContainer::GetIntegrityPolicyWAICT(
+              doc->GetPolicyContainer())) {
+        MOZ_ASSERT(
+            policy->ShouldHandle(IntegrityPolicy::DestinationType::Image));
 
-                // XXX Not clear if we want to use pre-redirect URL.
-                nsCOMPtr<nsIURI> originalURI;
-                channel->GetOriginalURI(getter_AddRefs(originalURI));
-                if (computedHash.IsEmpty() ||
-                    !integrity->CheckHash(originalURI, computedHash, doc)) {
-                  printf("ProxyListener::OnStopRequest: Wrong hash\n");
-                  return listener->OnStopRequest(request, NS_ERROR_FAILURE);
-                }
+        policy->WaitForManifestLoad()->Then(
+            GetCurrentSerialEventTarget(), __func__,
+            [listener = nsCOMPtr{mDestListener}, channel,
+             request = nsCOMPtr{aRequest}, status, policy = RefPtr{policy},
+             computedHash = nsCString(computedHash), doc = RefPtr{doc}](bool) {
+              // XXX Not clear if we want to use pre-redirect URL.
+              nsCOMPtr<nsIURI> originalURI;
+              channel->GetOriginalURI(getter_AddRefs(originalURI));
+              if (!policy->MaybeCheckResourceIntegrity(originalURI,
+                                                       computedHash, doc)) {
+                return listener->OnStopRequest(request, NS_ERROR_FAILURE);
+              }
 
-                printf("ProxyListener::OnStopRequest: Correct hash \\o/\n");
-                return listener->OnStopRequest(request, status);
-              },
-              [listener = nsCOMPtr{mDestListener},
-               request = nsCOMPtr{aRequest}](bool) {
-                MOZ_LOG(gWaictLog, LogLevel::Error,
-                        ("ProxyListener::OnStopRequest -- Promise rejected\n"));
-                // return listener->OnStopRequest(request, NS_ERROR_FAILURE);
-              });
+              return listener->OnStopRequest(request, status);
+            },
+            [](bool) {
+              MOZ_ASSERT_UNREACHABLE("should always resolve");
+              // Exceptional error (timeout, page closed, etc.) - always fail
+              // MOZ_LOG(gWaictLog, LogLevel::Error,
+              //         ("ProxyListener::OnStopRequest -- Promise rejected\n"));
+              // return listener->OnStopRequest(request, NS_ERROR_FAILURE);
+            });
 
-          return NS_OK;
-        }
+        return NS_OK;
       }
     }
   }

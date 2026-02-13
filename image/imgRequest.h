@@ -150,6 +150,8 @@ class imgRequest final : public nsIThreadRetargetableStreamListener,
   /// Returns a non-owning pointer to this imgRequest's MIME type.
   const char* GetMimeType() const { return mContentType.get(); }
 
+  int64_t GetContentLength() const { return mContentLength; }
+
   void GetFileName(nsACString& aFileName);
 
   /// @return the priority of the underlying network request, or
@@ -255,6 +257,7 @@ class imgRequest final : public nsIThreadRetargetableStreamListener,
   nsCOMPtr<nsITimedChannel> mTimedChannel;
 
   nsCString mContentType;
+  int64_t mContentLength;
 
   /* we hold on to this to this so long as we have observers */
   RefPtr<imgCacheEntry> mCacheEntry;

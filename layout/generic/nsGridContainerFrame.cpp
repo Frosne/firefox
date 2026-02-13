@@ -3286,8 +3286,8 @@ struct MOZ_STACK_CLASS nsGridContainerFrame::GridReflowInput {
       absCB->PrepareAbsoluteFrames(aGridContainerFrame);
     }
     // XXX NOTE: This is O(n^2) in the number of abs.pos. items. (bug 1252186)
-    const nsFrameList& absPosChildren = aGridContainerFrame->GetChildList(
-        aGridContainerFrame->GetAbsoluteListID());
+    const nsFrameList& absPosChildren =
+        aGridContainerFrame->GetChildList(FrameChildListID::Absolute);
     for (auto f : absPosChildren) {
       nsIFrame* childFirstInFlow = f->FirstInFlow();
       DebugOnly<size_t> len = mAbsPosItems.Length();
@@ -9622,7 +9622,7 @@ void nsGridContainerFrame::Reflow(nsPresContext* aPresContext,
 
   contentBSize =
       ReflowChildren(gridRI, contentArea, containerSize, aDesiredSize, aStatus);
-  if (Style()->GetPseudoType() == PseudoStyleType::scrolledContent) {
+  if (Style()->GetPseudoType() == PseudoStyleType::MozScrolledContent) {
     // Per spec, the grid area is included in a grid container's scrollable
     // overflow region [1], as well as the padding on the end-edge sides that
     // would satisfy the requirements of 'place-content: end' alignment [2].

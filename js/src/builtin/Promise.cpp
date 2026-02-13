@@ -2027,8 +2027,7 @@ static bool EnqueueJob(JSContext* cx, JS::JSMicroTask* job) {
 static bool GetCapabilitiesExecutor(JSContext* cx, unsigned argc, Value* vp);
 static bool PromiseConstructor(JSContext* cx, unsigned argc, Value* vp);
 [[nodiscard]] static PromiseObject* CreatePromiseObjectInternal(
-    JSContext* cx, HandleObject proto = nullptr, bool protoIsWrapped = false,
-    bool informDebugger = true);
+    JSContext* cx, HandleObject proto = nullptr, bool protoIsWrapped = false);
 
 enum GetCapabilitiesExecutorSlots {
   GetCapabilitiesExecutorSlots_Resolve,
@@ -2044,12 +2043,16 @@ enum GetCapabilitiesExecutorSlots {
 [[nodiscard]] PromiseObject* js::CreatePromiseObjectWithoutResolutionFunctions(
     JSContext* cx) {
   // Steps 3-7.
-  PromiseObject* promise = CreatePromiseObjectInternal(cx);
+  JS::Rooted<PromiseObject*> promise(cx, CreatePromiseObjectInternal(cx));
   if (!promise) {
     return nullptr;
   }
 
   AddPromiseFlags(*promise, PROMISE_FLAG_DEFAULT_RESOLVING_FUNCTIONS);
+
+  // Let the Debugger know about this Promise, after we've set
+  // flags and slots.
+  DebugAPI::onNewPromise(cx, promise);
 
   // Step 11. Return promise.
   return promise;
@@ -2077,6 +2080,10 @@ enum GetCapabilitiesExecutorSlots {
   }
 
   promise->setFixedSlot(PromiseSlot_RejectFunction, ObjectValue(*reject));
+
+  // Let the Debugger know about this Promise. Do this after we've set
+  // flags and functions
+  DebugAPI::onNewPromise(cx, promise);
 
   // Step 11. Return promise.
   return promise;
@@ -2961,8 +2968,7 @@ static JSFunction* GetResolveFunctionFromPromise(PromiseObject* promise) {
  */
 [[nodiscard]] static MOZ_ALWAYS_INLINE PromiseObject*
 CreatePromiseObjectInternal(JSContext* cx, HandleObject proto /* = nullptr */,
-                            bool protoIsWrapped /* = false */,
-                            bool informDebugger /* = true */) {
+                            bool protoIsWrapped /* = false */) {
   // Enter the unwrapped proto's compartment, if that's different from
   // the current one.
   // All state stored in a Promise's fixed slots must be created in the
@@ -3009,11 +3015,6 @@ CreatePromiseObjectInternal(JSContext* cx, HandleObject proto /* = nullptr */,
   PromiseDebugInfo* debugInfo = PromiseDebugInfo::create(cx, promiseRoot);
   if (!debugInfo) {
     return nullptr;
-  }
-
-  // Let the Debugger know about this Promise.
-  if (informDebugger) {
-    DebugAPI::onNewPromise(cx, promiseRoot);
   }
 
   return promiseRoot;
@@ -3163,7 +3164,7 @@ PromiseObject* PromiseObject::create(JSContext* cx, HandleObject executor,
 
   // Steps 3-7.
   RootedField<PromiseObject*, 1> promise(
-      roots, CreatePromiseObjectInternal(cx, usedProto, needsWrapping, false));
+      roots, CreatePromiseObjectInternal(cx, usedProto, needsWrapping));
   if (!promise) {
     return nullptr;
   }
@@ -3280,8 +3281,6 @@ class MOZ_STACK_CLASS PromiseForOfIterator : public JS::ForOfIterator {
     Handle<PromiseCapability> resultCapability, HandleValue promiseResolve,
     bool* done);
 
-enum class CombinatorKind { All, AllSettled, Any, Race };
-
 /**
  * ES2022 draft rev d03c1ec6e235a5180fa772b6178727c17974cb14
  *
@@ -3298,31 +3297,18 @@ enum class CombinatorKind { All, AllSettled, Any, Race };
  * GetPromiseResolve ( promiseConstructor )
  * https://tc39.es/ecma262/#sec-getpromiseresolve
  */
-[[nodiscard]] static bool CommonPromiseCombinator(JSContext* cx, CallArgs& args,
-                                                  CombinatorKind kind) {
-  HandleValue iterable = args.get(0);
-
+template <typename IterT, typename PerformFuncT, typename InitIterFuncT,
+          typename MaybeCloseIterFuncT>
+[[nodiscard]] static bool CommonPromiseCombinator(
+    JSContext* cx, CallArgs& args, PerformFuncT performFunc,
+    const char* nonObjectThisErrorMessage, const char* nonIterableErrorMessage,
+    InitIterFuncT initIter, MaybeCloseIterFuncT maybeCloseIterFunc) {
   // Step 2. Let promiseCapability be ? NewPromiseCapability(C).
   // (moved from NewPromiseCapability, step 1).
   HandleValue CVal = args.thisv();
   if (!CVal.isObject()) {
-    const char* message;
-    switch (kind) {
-      case CombinatorKind::All:
-        message = "Receiver of Promise.all call";
-        break;
-      case CombinatorKind::AllSettled:
-        message = "Receiver of Promise.allSettled call";
-        break;
-      case CombinatorKind::Any:
-        message = "Receiver of Promise.any call";
-        break;
-      case CombinatorKind::Race:
-        message = "Receiver of Promise.race call";
-        break;
-    }
     JS_ReportErrorNumberASCII(cx, GetErrorMessage, nullptr,
-                              JSMSG_OBJECT_REQUIRED, message);
+                              JSMSG_OBJECT_REQUIRED, nonObjectThisErrorMessage);
     return false;
   }
 
@@ -3365,78 +3351,37 @@ enum class CombinatorKind { All, AllSettled, Any, Race };
     }
   }
 
-  // Step 5. Let iteratorRecord be GetIterator(iterable).
-  PromiseForOfIterator iter(cx);
-  if (!iter.init(iterable, JS::ForOfIterator::AllowNonIterable)) {
+  // Step 5.
+  IterT iter(cx);
+  if (!initIter(iter)) {
     // Step 6. IfAbruptRejectPromise(iteratorRecord, promiseCapability).
     return AbruptRejectPromise(cx, args, promiseCapability);
   }
 
-  if (!iter.valueIsIterable()) {
-    // Step 6. IfAbruptRejectPromise(iteratorRecord, promiseCapability).
-    const char* message;
-    switch (kind) {
-      case CombinatorKind::All:
-        message = "Argument of Promise.all";
-        break;
-      case CombinatorKind::AllSettled:
-        message = "Argument of Promise.allSettled";
-        break;
-      case CombinatorKind::Any:
-        message = "Argument of Promise.any";
-        break;
-      case CombinatorKind::Race:
-        message = "Argument of Promise.race";
-        break;
-    }
-    JS_ReportErrorNumberASCII(cx, GetErrorMessage, nullptr, JSMSG_NOT_ITERABLE,
-                              message);
-    return AbruptRejectPromise(cx, args, promiseCapability);
-  }
-
-  bool done, result;
-  switch (kind) {
-    case CombinatorKind::All:
-      // Promise.all
-      // Step 7. Let result be
-      //         PerformPromiseAll(iteratorRecord, C, promiseCapability,
-      //                           promiseResolve).
-      result = PerformPromiseAll(cx, iter, C, promiseCapability, promiseResolve,
-                                 &done);
-      break;
-    case CombinatorKind::AllSettled:
-      // Promise.allSettled
-      // Step 7. Let result be
-      //         PerformPromiseAllSettled(iteratorRecord, C, promiseCapability,
-      //                                  promiseResolve).
-      result = PerformPromiseAllSettled(cx, iter, C, promiseCapability,
-                                        promiseResolve, &done);
-      break;
-    case CombinatorKind::Any:
-      // Promise.any
-      // Step 7. Let result be
-      //         PerformPromiseAny(iteratorRecord, C, promiseCapability,
-      //                           promiseResolve).
-      result = PerformPromiseAny(cx, iter, C, promiseCapability, promiseResolve,
-                                 &done);
-      break;
-    case CombinatorKind::Race:
-      // Promise.race
-      // Step 7. Let result be
-      //         PerformPromiseRace(iteratorRecord, C, promiseCapability,
-      //                            promiseResolve).
-      result = PerformPromiseRace(cx, iter, C, promiseCapability,
-                                  promiseResolve, &done);
-      break;
-  }
+  // Promise.all
+  // Step 7. Let result be
+  //         PerformPromiseAll(iteratorRecord, C, promiseCapability,
+  //                           promiseResolve).
+  // Promise.allSettled
+  // Step 7. Let result be
+  //         PerformPromiseAllSettled(iteratorRecord, C, promiseCapability,
+  //                                  promiseResolve).
+  // Promise.race
+  // Step 7. Let result be
+  //         PerformPromiseRace(iteratorRecord, C, promiseCapability,
+  //                            promiseResolve).
+  // Promise.any
+  // Step 7. Let result be
+  //         PerformPromiseAny(iteratorRecord, C, promiseCapability,
+  //                           promiseResolve).
+  bool done;
+  bool result =
+      performFunc(cx, iter, C, promiseCapability, promiseResolve, &done);
 
   // Step 8. If result is an abrupt completion, then
   if (!result) {
-    // Step 8.a. If iteratorRecord.[[Done]] is false,
-    //           set result to IteratorClose(iteratorRecord, result).
-    if (!done) {
-      iter.closeThrow();
-    }
+    // Step 8.a.
+    maybeCloseIterFunc(iter, done);
 
     // Step 8.b. IfAbruptRejectPromise(result, promiseCapability).
     return AbruptRejectPromise(cx, args, promiseCapability);
@@ -3447,6 +3392,41 @@ enum class CombinatorKind { All, AllSettled, Any, Race };
   return true;
 }
 
+template <typename PerformFuncT>
+[[nodiscard]] static bool CommonIterPromiseCombinator(
+    JSContext* cx, CallArgs& args, PerformFuncT performFunc,
+    const char* nonObjectThisErrorMessage,
+    const char* nonIterableErrorMessage) {
+  JS::Handle<JS::Value> iterable = args.get(0);
+
+  auto initIter = [&](PromiseForOfIterator& iter) {
+    // Step 5. Let iteratorRecord be GetIterator(iterable).
+    if (!iter.init(iterable, JS::ForOfIterator::AllowNonIterable)) {
+      return false;
+    }
+
+    if (!iter.valueIsIterable()) {
+      JS_ReportErrorNumberASCII(cx, GetErrorMessage, nullptr,
+                                JSMSG_NOT_ITERABLE, nonIterableErrorMessage);
+      return false;
+    }
+
+    return true;
+  };
+
+  auto maybeCloseIter = [](PromiseForOfIterator& iter, bool done) {
+    // Step 8.a. If iteratorRecord.[[Done]] is false,
+    //           set result to IteratorClose(iteratorRecord, result).
+    if (!done) {
+      iter.closeThrow();
+    }
+  };
+
+  return CommonPromiseCombinator<PromiseForOfIterator>(
+      cx, args, performFunc, nonObjectThisErrorMessage, nonIterableErrorMessage,
+      initIter, maybeCloseIter);
+}
+
 /**
  * ES2022 draft rev d03c1ec6e235a5180fa772b6178727c17974cb14
  *
@@ -3455,7 +3435,9 @@ enum class CombinatorKind { All, AllSettled, Any, Race };
  */
 static bool Promise_static_all(JSContext* cx, unsigned argc, Value* vp) {
   CallArgs args = CallArgsFromVp(argc, vp);
-  return CommonPromiseCombinator(cx, args, CombinatorKind::All);
+  return CommonIterPromiseCombinator(cx, args, PerformPromiseAll,
+                                     "Receiver of Promise.all call",
+                                     "Argument of Promise.all");
 }
 
 #ifdef NIGHTLY_BUILD
@@ -4504,7 +4486,9 @@ static bool PromiseAllResolveElementFunction(JSContext* cx, unsigned argc,
  */
 static bool Promise_static_race(JSContext* cx, unsigned argc, Value* vp) {
   CallArgs args = CallArgsFromVp(argc, vp);
-  return CommonPromiseCombinator(cx, args, CombinatorKind::Race);
+  return CommonIterPromiseCombinator(cx, args, PerformPromiseRace,
+                                     "Receiver of Promise.race call",
+                                     "Argument of Promise.race");
 }
 
 /**
@@ -4556,7 +4540,9 @@ static bool PromiseAllSettledElementFunction(JSContext* cx, unsigned argc,
  */
 static bool Promise_static_allSettled(JSContext* cx, unsigned argc, Value* vp) {
   CallArgs args = CallArgsFromVp(argc, vp);
-  return CommonPromiseCombinator(cx, args, CombinatorKind::AllSettled);
+  return CommonIterPromiseCombinator(cx, args, PerformPromiseAllSettled,
+                                     "Receiver of Promise.allSettled call",
+                                     "Argument of Promise.allSettled");
 }
 
 /**
@@ -4776,7 +4762,9 @@ static bool PromiseAllSettledElementFunction(JSContext* cx, unsigned argc,
  */
 static bool Promise_static_any(JSContext* cx, unsigned argc, Value* vp) {
   CallArgs args = CallArgsFromVp(argc, vp);
-  return CommonPromiseCombinator(cx, args, CombinatorKind::Any);
+  return CommonIterPromiseCombinator(cx, args, PerformPromiseAny,
+                                     "Receiver of Promise.any call",
+                                     "Argument of Promise.any");
 }
 
 static bool PromiseAnyRejectElementFunction(JSContext* cx, unsigned argc,

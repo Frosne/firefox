@@ -14,7 +14,6 @@
 #include "mozilla/dom/WAICTManifestBinding.h"
 #include "nsIContentPolicy.h"
 #include "nsIIntegrityPolicy.h"
-#include "nsIStreamLoader.h"
 #include "nsTArray.h"
 #include "nsTHashMap.h"
 #include "nsTHashSet.h"
@@ -33,19 +32,16 @@ namespace dom {
 
 class Document;
 
-class IntegrityPolicy : public nsIIntegrityPolicy,
-                        public nsIStreamLoaderObserver {
+class IntegrityPolicy : public nsIIntegrityPolicy {
  public:
   NS_DECL_ISUPPORTS
   NS_DECL_NSISERIALIZABLE
   NS_DECL_NSIINTEGRITYPOLICY
-  NS_DECL_NSISTREAMLOADEROBSERVER
 
   IntegrityPolicy() = default;
 
   static nsresult ParseHeaders(const nsACString& aHeader,
                                const nsACString& aHeaderRO,
-                               const nsACString& aWaict, nsIURI* aDocumentURI,
                                IntegrityPolicy** aPolicy);
 
   enum class SourceType : uint8_t { Inline };
@@ -80,34 +76,10 @@ class IntegrityPolicy : public nsIIntegrityPolicy,
   static bool Equals(const IntegrityPolicy* aPolicy,
                      const IntegrityPolicy* aOtherPolicy);
 
-  bool HasWaictFor(DestinationType aDestination);
-
-  using WAICTManifestLoadedPromise =
-      MozPromise<bool, bool, /* IsExclusive */ false>;
-  RefPtr<WAICTManifestLoadedPromise> WaitForManifestLoad();
-
-  bool CheckHash(nsIURI* aURI, const nsACString& aHash,
-                 Document* aDocument = nullptr);
-
-  enum class ManifestValidationStatus : uint8_t {
-    OK,
-    InvalidJSON,
-    MissingVersion,
-    InvalidVersion,
-    MissingHashes,
-    InvalidHashFormat
-  };
-
-  static ManifestValidationStatus ValidateManifest(
-      const nsACString& aManifestJSON, WAICTManifest& aOutManifest);
-
  protected:
-  virtual ~IntegrityPolicy();
+  virtual ~IntegrityPolicy() = default;
 
  private:
-  nsresult ParseWaict(nsIURI* aDocumentURI, const nsACString& aHeader);
-  void FetchWaictManifest();
-
   class Entry final {
    public:
     Entry(Sources aSources, Destinations aDestinations,
@@ -133,17 +105,6 @@ class IntegrityPolicy : public nsIIntegrityPolicy,
 
   Maybe<Entry> mEnforcement;
   Maybe<Entry> mReportOnly;
-
-  nsCOMPtr<nsIURI> mDocumentURI;
-  nsCString mWaictManifestURL;
-  // XXX We should not use this directly.
-  WAICTManifest mWaictManifest;
-  Destinations mWaictDestinations;
-  RefPtr<WAICTManifestLoadedPromise::Private> mWAICTPromise;
-
-  // We translate the received un-JSONed arrays to hashmap/set
-  nsTHashMap<nsStringHashKey, nsString> mHashesLookup;
-  nsTHashSet<nsStringHashKey> mAnyHashesLookup;
 };
 
 }  // namespace dom

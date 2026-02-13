@@ -350,12 +350,19 @@ class Settings(
     }
 
     /**
-     * Indicates if the custom review prompt feature should be enabled. `True` if the feature is
-     * enabled, `false` otherwise.
+     * Indicates if review prompt feature should use the new trigger criteria.
      */
-    var customReviewPromptFeatureEnabled by booleanPreference(
+    var newReviewPromptTriggerCriteriaEnabled by booleanPreference(
         appContext.getPreferenceKey(R.string.pref_key_custom_review_prompt_enabled),
         default = { FxNimbus.features.customReviewPrompt.value().enabled },
+    )
+
+    /**
+     * Indicates if the custom review prompt UI should be enabled.
+     */
+    var customReviewPromptUiEnabled by booleanPreference(
+        appContext.getPreferenceKey(R.string.pref_key_custom_review_prompt_ui_enabled),
+        default = { FxNimbus.features.customReviewPromptUi.value().enabled },
     )
 
     var lastCfrShownTimeInMillis by longPreference(
@@ -722,6 +729,16 @@ class Settings(
     var isRolloutsEnabled by lazyBooleanPreference(
         key = appContext.getPreferenceKey(R.string.pref_key_rollouts),
         defaultValue = { appContext.components.nimbus.sdk.rolloutParticipation },
+    )
+
+    /**
+     * Timestamp in milliseconds when the "Set as default browser" system prompt was requested.
+     * Used to calculate the response time and detect if the prompt was automatically suppressed
+     * by the system (e.g., when "Don't ask again" is active).
+     */
+    var setToDefaultPromptRequested by longPreference(
+        appContext.getPreferenceKey(R.string.pref_key_last_set_as_default_prompt_request_time),
+        default = 0L,
     )
 
     var isOverrideTPPopupsForPerformanceTest = false
@@ -2238,6 +2255,30 @@ class Settings(
 
     var firstWeekSeriesGrowthSent by booleanPreference(
         key = appContext.getPreferenceKey(R.string.pref_key_growth_first_week_series_sent),
+        default = false,
+    )
+
+    var firstWeekPostInstallLastThreeDaysActivitySent by booleanPreference(
+        key = appContext.getPreferenceKey(R.string.pref_key_first_week_post_install_last_three_days_activity_sent),
+        default = false,
+    )
+
+    var firstWeekPostInstallRecurrentActivitySent by booleanPreference(
+        key = appContext.getPreferenceKey(R.string.pref_key_first_week_post_install_recurrent_activity_sent),
+        default = false,
+    )
+
+    var firstWeekPostInstallEverydayActivityAndSetToDefaultSent by booleanPreference(
+        key = appContext.getPreferenceKey(
+            R.string.pref_key_first_week_post_install_everyday_activity_and_set_to_default_sent,
+        ),
+        default = false,
+    )
+
+    var firstWeekPostInstallIsBrowserSetToDefaultDuringFirstFourDays by booleanPreference(
+        key = appContext.getPreferenceKey(
+            R.string.pref_key_first_week_post_install_is_browser_set_to_default_during_first_four_days,
+        ),
         default = false,
     )
 

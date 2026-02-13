@@ -590,9 +590,9 @@ static void ReleaseValue(T* aPropertyValue) {
     return nsQueryFrame::class##_id;                                           \
   }
 
-#define NS_IMPL_FRAMEARENA_HELPERS(class)                             \
-  void* class ::operator new(size_t sz, mozilla::PresShell* aShell) { \
-    return aShell->AllocateFrame(nsQueryFrame::class##_id, sz);       \
+#define NS_IMPL_FRAMEARENA_HELPERS(class)                              \
+  void* class ::operator new(size_t sz, mozilla::PresShell * aShell) { \
+    return aShell->AllocateFrame(nsQueryFrame::class##_id, sz);        \
   }
 
 #define NS_DECL_ABSTRACT_FRAME(class)                                         \
@@ -1011,25 +1011,6 @@ class nsIFrame : public nsQueryFrame {
   nscolor GetVisitedDependentColor(T S::* aField) {
     return mComputedStyle->GetVisitedDependentColor(aField);
   }
-
-  /**
-   * These methods are to access any additional ComputedStyles that
-   * the frame may be holding.
-   *
-   * These are styles that are children of the frame's primary style and are NOT
-   * used as styles for any child frames.
-   *
-   * These contexts also MUST NOT have any child styles whatsoever. If you need
-   * to insert styles into the style tree, then you should create pseudo element
-   * frames to own them.
-   *
-   * The indicies must be consecutive and implementations MUST return null if
-   * asked for an index that is out of range.
-   */
-  virtual ComputedStyle* GetAdditionalComputedStyle(int32_t aIndex) const;
-
-  virtual void SetAdditionalComputedStyle(int32_t aIndex,
-                                          ComputedStyle* aComputedStyle);
 
   /**
    * @param aSelectionStatus nsISelectionController::getDisplaySelection.
@@ -4655,11 +4636,6 @@ class nsIFrame : public nsQueryFrame {
   mozilla::AbsoluteContainingBlock* GetAbsoluteContainingBlock() const;
   void MarkAsAbsoluteContainingBlock();
   void MarkAsNotAbsoluteContainingBlock();
-  // Child frame types override this function to select their own child list
-  // name
-  virtual mozilla::FrameChildListID GetAbsoluteListID() const {
-    return mozilla::FrameChildListID::Absolute;
-  }
 
   // Checks if we (or any of our descendants) have NS_FRAME_PAINTED_THEBES set,
   // and clears this bit if so.

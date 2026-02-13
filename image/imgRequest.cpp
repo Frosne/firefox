@@ -631,9 +631,6 @@ imgRequest::OnStartRequest(nsIRequest* aRequest) {
 
   RefPtr<Image> image;
 
-  // Initialize the hasher for resource integrity verification.
-  mResourceHasher = ResourceHasher::Init(nsICryptoHash::SHA256);
-
   if (nsCOMPtr<nsIHttpChannel> httpChannel = do_QueryInterface(aRequest)) {
     nsresult rv;
     nsCOMPtr<nsILoadInfo> loadInfo = httpChannel->LoadInfo();
@@ -688,6 +685,24 @@ imgRequest::OnStartRequest(nsIRequest* aRequest) {
           channel, getter_AddRefs(mPrincipal));
       if (NS_FAILED(rv)) {
         return rv;
+      }
+    }
+
+    nsCOMPtr<nsILoadInfo> loadInfo = channel->LoadInfo();
+    nsCOMPtr<nsISupports> loadingContext = loadInfo->GetLoadingContext();
+
+    RefPtr<Document> doc;
+    if (nsCOMPtr<nsINode> node = do_QueryInterface(loadingContext)) {
+      doc = node->OwnerDoc();
+    }
+
+    if (doc) {
+      if (auto* policy = PolicyContainer::GetIntegrityPolicyWAICT(
+              doc->GetPolicyContainer())) {
+        if (policy->ShouldHandle(IntegrityPolicy::DestinationType::Image)) {
+          // Initialize the hasher for resource integrity verification.
+          mResourceHasher = ResourceHasher::Init(nsICryptoHash::SHA256);
+        }
       }
     }
   }
@@ -854,6 +869,7 @@ struct NewPartResult final {
         mShouldResetCacheEntry(false) {}
 
   nsAutoCString mContentType;
+  int64_t mContentLength;
   nsAutoCString mContentDisposition;
   RefPtr<image::Image> mImage;
   const bool mIsFirstPart;
@@ -895,6 +911,7 @@ static NewPartResult PrepareForNewPart(nsIRequest* aRequest,
 
   if (chan) {
     chan->GetContentDispositionHeader(result.mContentDisposition);
+    chan->GetContentLength(&result.mContentLength);
   }
 
   MOZ_LOG(gImgLog, LogLevel::Debug,
@@ -972,6 +989,7 @@ void imgRequest::FinishPreparingForNewPart(const NewPartResult& aResult) {
   MOZ_ASSERT(NS_IsMainThread());
 
   mContentType = aResult.mContentType;
+  mContentLength = aResult.mContentLength;
 
   SetProperties(aResult.mContentType, aResult.mContentDisposition);
 
