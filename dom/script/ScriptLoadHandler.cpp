@@ -478,7 +478,8 @@ ScriptLoadHandler::OnStreamComplete(nsIIncrementalStreamLoader* aLoader,
         nsCOMPtr<nsIURI> originalURI;
         channel->GetOriginalURI(getter_AddRefs(originalURI));
         if (!integrity->MaybeCheckResourceIntegrity(
-                originalURI, computedHash, self->mScriptLoader->mDocument)) {
+                originalURI, IntegrityPolicy::DestinationType::Script,
+                computedHash, self->mScriptLoader->mDocument)) {
           MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
                       "ScriptLoadHandler::OnStreamComplete: Wrong script hash");
           self->DoOnStreamComplete(channel, NS_ERROR_FAILURE, dataCopy.Length(),
