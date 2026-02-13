@@ -81,7 +81,7 @@ bool IntegrityPolicyWAICT::MaybeCheckResourceIntegrity(
                                        NS_ConvertUTF8toUTF16(*hashValue),
                                        NS_ConvertUTF8toUTF16(aHash)};
           ReportMessage(nsIScriptError::errorFlag, "WAICT"_ns,
-                        "WAICTManifestInvalidHash", params);
+                        "WAICTHashMismatch", params);
           ReportViolation(aURI, aDestination);
           return false;
         }
@@ -132,8 +132,9 @@ nsresult IntegrityPolicyWAICT::Create(Document* aDocument,
 
   // We can't propagate the error here, because we would never flush
   // the console messages.
-  (void)policy->ParseHeader(aHeader);
-  policy->FetchManifest();
+  if (NS_SUCCEEDED(policy->ParseHeader(aHeader))) {
+    policy->FetchManifest();
+  }
 
   policy.forget(aPolicy);
   return NS_OK;
