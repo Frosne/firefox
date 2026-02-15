@@ -1,6 +1,4 @@
 {
-  "version": 1,
-  "integrity-policy": "sources=(inline)",
   "hashes": {
     "/waict/resources/correct.png": "gaZGzOUHI8LJf9wn43u7eYYBECYSYdh3omBjYNWbNME=",
     "/waict/resources/incorrect.png": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",

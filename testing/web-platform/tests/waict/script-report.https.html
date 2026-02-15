@@ -6,21 +6,25 @@
 <script src="resources/waict-test-helpers.js"></script>
 <body>
    <script>
-      // In this file we have 2 types of tests: 
+      // In this file we have 2 types of tests:
       // 1) Specifically the tests that are related to scripts
-      // 2) General cases tests, for example, wrong headers. 
-      // 
+      // 2) General cases tests, for example, wrong headers.
+      //
       // Currently supported test scenarios:
-      // Scripts: 
+      // Scripts:
       //   1. Script with correct hash present in the manifest in the hashes section
       //   2. Script with incorrect hash present in the manifest in the hashes section
       //   3. Script with hash present in the manifest in the any_hashes section
       //   4. Script with incorrect hash in the any_hashes section
       //   5. Script not present in the manifest at all
-      // 
-      // General cases tests: 
-      //   6. Wrong manifest - missing integrity policy
-      //   7. Wrong header - missing mode field
+      //
+      // General cases tests:
+      //   a) Header tests (not exhaustive - see TestWAICTHeader for comprehensive header tests):
+      //      6. Header missing mandatory blocked-destinations field
+      //      7. Header missing mandatory mode field
+      //      9. Header with empty blocked-destinations field
+      //   b) Manifest tests (not exhaustive - see TestWAICTManifest for comprehensive manifest tests):
+      //      8. Manifest missing optional resource_delimiter field
       
       // Test 1: Script with the correct hash in hashes is executed. 
       
@@ -98,32 +102,29 @@
         checkIntegrityViolationReport(result.reports, 'no_hash.js', true);
       }, 'Script not in manifest should load but generate violation (report mode)');
 
-     // Test 6: Script with broken manifest (missing integrity-policy field)
-     // {
-     //   [missing integrity policy header]
-     //   "hashes": {
-     //      the hash is still correct
-     //      "/waict/resources/correct.js": "9pA6JeWU8YRofiUMcGHi0BulJHCdtjrTuVE/59ukmmY="
-     //   }
-     // }
+     // Test 6: Script with malformed header (missing blocked-destinations parameter)
+     // Integrity-Policy-WAICT-v1: manifest="waict-manifest.json", mode=report
+     // Missing required field "blocked-destinations"
      // TODO: Add error code
+     // When header parsing fails, WAICT is not enforced at all
     promise_test(async t => {
       setupIntegrityViolationObserver(t);
 
       const result = await loadScriptInIframe(
-        'resources/iframe-with-no-integrity-policy-report.html',
+        'resources/iframe-with-no-blocked-destinations-report.html',
         'correct.js'
       );
 
-      assert_true(result.loaded, 'Script should load even when manifest is invalid');
-      assert_true(result.ran, 'Script should execute when manifest is invalid');
+      // NB: the hash in the manifest is still correct
+      assert_true(result.loaded, 'Script should load when header is malformed (WAICT disabled)');
+      assert_true(result.ran, 'Script should execute when header is malformed (WAICT disabled)');
 
       // Wait a bit for reports to be generated
       await new Promise(resolve => t.step_timeout(resolve, 100));
 
-      // Check integrity violation reports
-      checkIntegrityViolationReport(result.reports, 'correct.js', true);
-    }, 'Script should load but generate violation when manifest is missing integrity-policy (report mode)');
+      // No reports should be generated when WAICT is disabled
+      assert_equals(result.reports.length, 0, 'Should not generate reports when WAICT is disabled due to header parsing failure');
+    }, 'Script should load without reports when header is missing blocked-destinations parameter (WAICT disabled)');
 
     // Test 7: Script with malformed header (missing mode parameter)
     // Integrity-Policy-WAICT-v1: manifest="waict-manifest.json", blocked-destinations=(script)
@@ -147,5 +148,38 @@
       // No reports should be generated when WAICT is disabled
       assert_equals(result.reports.length, 0, 'Should not generate reports when WAICT is disabled due to header parsing failure');
       }, 'Script should load without reports when header is missing mode parameter (WAICT disabled)');
+
+    // Test 8: Script with manifest missing optional resource_delimiter field
+    // Tests that optional fields can be omitted and manifest is still valid
+    promise_test(async t => {
+      const result = await loadScriptInIframe(
+        'resources/iframe-with-no-resource-delimiter-report.html',
+        'correct.js'
+      );
+
+      // Manifest should be valid even without optional resource_delimiter field
+      assert_true(result.loaded, 'Script should load when manifest is missing optional resource_delimiter field');
+      assert_true(result.ran, 'Script should execute when manifest is missing optional resource_delimiter field');
+
+      // No reports should be generated for valid manifest with correct hash
+      assert_equals(result.reports.length, 0, 'Should not generate reports when optional field is missing but manifest is otherwise valid');
+    }, 'Script should load successfully when manifest is missing optional resource_delimiter field (report mode)');
+
+    // Test 9: Script with empty blocked-destinations
+    // Integrity-Policy-WAICT-v1: manifest="waict-manifest.json", blocked-destinations=(), mode=report
+    // Empty blocked-destinations means no resource types are blocked
+    promise_test(async t => {
+      const result = await loadScriptInIframe(
+        'resources/iframe-with-empty-blocked-destinations-report.html',
+        'correct.js'
+      );
+
+      // With empty blocked-destinations, scripts are not blocked
+      assert_true(result.loaded, 'Script should load when blocked-destinations is empty');
+      assert_true(result.ran, 'Script should execute when blocked-destinations is empty');
+
+      // No reports should be generated when resource type is not in blocked-destinations
+      assert_equals(result.reports.length, 0, 'Should not generate reports when blocked-destinations is empty');
+    }, 'Script should load successfully when blocked-destinations is empty (report mode)');
    </script>
 </body>

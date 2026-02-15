@@ -5,10 +5,14 @@ This directory contains Web Platform Tests for the WAICT specification, which pr
 ## Test Files
 
 ### Image Tests
-- **`image-enforce.https.html`** - Tests image loading with WAICT policy in enforce mode (blocks non-compliant resources)
+- **`image-enforce.https.html`** - Tests image loading with WAICT policy in enforce mode (blocks non-compliant resources; reports violations)
 - **`image-report.https.html`** - Tests image loading with WAICT policy in report mode (allows resources but reports violations)
+- **`image-enforce-script-only.https.html`** - Tests that image hash is not validated when `blocked-destinations=(script)` and manifest is valid
+- **`image-report-script-only.https.html`** - Tests that image hash is not validated when `blocked-destinations=(script)` and manifest is valid (report mode)
+- **`image-enforce-invalid-hash.https.html`** - Tests that invalid manifest (hash too long) blocks images even when `blocked-destinations=(script)` (enforce mode)
+- **`image-report-invalid-hash.https.html`** - Tests that invalid manifest (hash too long) generates reports even when `blocked-destinations=(script)` (report mode)
 
-### Script Tests
+### Script (and General) Tests
 - **`script-enforce.https.html`** - Tests script loading with WAICT policy in enforce mode
 - **`script-report.https.html`** - Tests script loading with WAICT policy in report mode
 
@@ -29,14 +33,25 @@ Each test suite covers the following scenarios:
    - In enforce mode: fail to load and generate violation report
    - In report mode: load successfully but generate violation report
 
-### Policy Validation Scenarios (tested with scripts)
-These scenarios test WAICT policy and manifest validation. While they apply to all resource types, they are currently only tested with scripts.
+### Policy Validation Scenarios
 
-6. **Missing integrity-policy field** - Manifest without required `integrity-policy` field should:
-   - In enforce mode: block resource and generate violation report
-   - In report mode: allow resource to load and generate violation report
+#### Tested with Scripts
+6. **Missing blocked-destinations parameter** - Header missing required `blocked-destinations` parameter should:
+   - WAICT is disabled: resource loads normally without any reports
 7. **Missing mode parameter** - Header missing required `mode` parameter should:
    - WAICT is disabled: resource loads normally without any reports
+8. **Missing optional resource_delimiter field** - Manifest without optional `resource_delimiter` field should:
+   - Manifest is valid: resource loads normally without any reports in both modes
+9. **Empty blocked-destinations** - Header with empty `blocked-destinations=()` should:
+   - No resource types blocked: resource loads normally without any reports in both modes
+
+#### Tested with Images
+10. **Resource type not in blocked-destinations** - Header with `blocked-destinations=(script)` and manifest contains image hashes:
+   - Manifest is valid, but image hash is not validated: images load normally without any reports in both modes
+11. **Invalid manifest with resource not in blocked-destinations** - Header with `blocked-destinations=(script)` and manifest has invalid hash format (too long):
+   - Manifest is invalid, affecting all resources regardless of blocked-destinations:
+     - In enforce mode: image is blocked and generates violation report
+     - In report mode: image loads but generates violation report
 
 ## Running the Tests
 
