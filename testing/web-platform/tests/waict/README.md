@@ -11,6 +11,8 @@ This directory contains Web Platform Tests for the WAICT specification, which pr
 - **`image-report-script-only.https.html`** - Tests that image hash is not validated when `blocked-destinations=(script)` and manifest is valid (report mode)
 - **`image-enforce-invalid-hash.https.html`** - Tests that invalid manifest (hash too long) blocks images even when `blocked-destinations=(script)` (enforce mode)
 - **`image-report-invalid-hash.https.html`** - Tests that invalid manifest (hash too long) generates reports even when `blocked-destinations=(script)` (report mode)
+- **`image-max-age-persist.https.html`** - Tests that WAICT policy persists within max-age period (downgrade protection)
+- **`image-max-age-expire.https.html`** - Tests that WAICT policy expires after max-age period
 
 ### Script (and General) Tests
 - **`script-enforce.https.html`** - Tests script loading with WAICT policy in enforce mode
@@ -56,6 +58,15 @@ Each test suite covers the following scenarios:
    - Manifest is invalid, affecting all resources regardless of blocked-destinations:
      - In enforce mode: image is blocked and generates violation report
      - In report mode: image loads but generates violation report
+
+### Max-age Downgrade Protection (Tested with Images, Enforce Mode)
+14. **Policy persists within max-age** - `image-max-age-persist.https.html`:
+   - Test loads a page with WAICT header (`max-age=90`), verifies image is blocked
+   - Then loads the same page WITHOUT WAICT header (within 90s), verifies cached policy still blocks image
+15. **Policy expires after max-age** - `image-max-age-expire.https.html`:
+   - Test loads a page with WAICT header (`max-age=1`), verifies image is blocked
+   - Waits 2+ seconds, then loads the same page WITHOUT WAICT header, verifies policy expired and image now loads
+   - AW: There is a patch in the file allowing to see the changes yourself
 
 ## Running the Tests
 
