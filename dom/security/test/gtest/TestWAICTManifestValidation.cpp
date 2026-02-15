@@ -17,8 +17,6 @@ TEST(WAICTManifestValidation, ValidManifestBasic)
 {
   WAICTManifest manifest;
   nsCString json(R"JSON({
-    "version": 1,
-    "integrity-policy": "sources=(inline)",
     "bt-server": "https://bt.example.com",
     "hashes": {
       "/assets/main.js": "r4j9yW07mpTFSQ6ZRYOV0Au8Hfn2NqjqQMBqKL/SWCY="
@@ -34,8 +32,6 @@ TEST(WAICTManifestValidation, ValidManifestWithMultipleHashes)
 {
   WAICTManifest manifest;
   nsCString json(R"JSON({
-    "version": 1,
-    "integrity-policy": "sources=(inline)",
     "bt-server": "https://bt.example.com",
     "hashes": {
       "/assets/x.html": "r4j9yW07mpTFSQ6ZRYOV0Au8Hfn2NqjqQMBqKL/SWCY=",
@@ -53,8 +49,6 @@ TEST(WAICTManifestValidation, ValidManifestWithMixedCaseBase64)
 {
   WAICTManifest manifest;
   nsCString json(R"JSON({
-    "version": 1,
-    "integrity-policy": "sources=(inline)",
     "hashes": {
       "/script.js": "R4J9Yw07MpTfSq6zRYOv0aU8HFN2nQJQqmbQkl/SwCy="
     }
@@ -69,8 +63,6 @@ TEST(WAICTManifestValidation, ValidManifestWithOnlyHashes)
 {
   WAICTManifest manifest;
   nsCString json(R"JSON({
-    "version": 1,
-    "integrity-policy": "sources=(inline)",
     "hashes": {
       "/script.js": "r4j9yW07mpTFSQ6ZRYOV0Au8Hfn2NqjqQMBqKL/SWCY="
     }
@@ -85,8 +77,6 @@ TEST(WAICTManifestValidation, ValidManifestWithOnlyAnyHashes)
 {
   WAICTManifest manifest;
   nsCString json(R"JSON({
-    "version": 1,
-    "integrity-policy": "sources=(inline)",
     "any_hashes": [
       "mVuswfW4XCBOWbx+QiKkPPQy+gTfr+i1sVADexgyN+8=",
       "H9OJUrESfT3SUlRpqAiDFEvqnnG2Sp9/eloyVMqxnnY="
@@ -102,8 +92,6 @@ TEST(WAICTManifestValidation, ValidManifestWithBothAnyHashesAndHashes)
 {
   WAICTManifest manifest;
   nsCString json(R"JSON({
-    "version": 1,
-    "integrity-policy": "sources=(inline)",
     "bt-server": "https://bt.example.com",
     "hashes": {
       "/script.js": "r4j9yW07mpTFSQ6ZRYOV0Au8Hfn2NqjqQMBqKL/SWCY="
@@ -126,8 +114,6 @@ TEST(WAICTManifestValidation, ValidManifestWithEmptyAnyHashes)
 {
   WAICTManifest manifest;
   nsCString json(R"JSON({
-    "version": 1,
-    "integrity-policy": "sources=(inline)",
     "bt-server": "https://bt.example.com",
     "hashes": {
       "/script.js": "r4j9yW07mpTFSQ6ZRYOV0Au8Hfn2NqjqQMBqKL/SWCY="
@@ -148,8 +134,6 @@ TEST(WAICTManifestValidation, ValidManifestWithDuplicateAnyHashes)
 {
   WAICTManifest manifest;
   nsCString json(R"JSON({
-    "version": 1,
-    "integrity-policy": "sources=(inline)",
     "any_hashes": [
       "mVuswfW4XCBOWbx+QiKkPPQy+gTfr+i1sVADexgyN+8=",
       "H9OJUrESfT3SUlRpqAiDFEvqnnG2Sp9/eloyVMqxnnY=",
@@ -166,8 +150,6 @@ TEST(WAICTManifestValidation, ValidManifestWithResourceDelimiter)
 {
   WAICTManifest manifest;
   nsCString json(R"JSON({
-    "version": 1,
-    "integrity-policy": "sources=(inline)",
     "hashes": {
       "/script.js": "r4j9yW07mpTFSQ6ZRYOV0Au8Hfn2NqjqQMBqKL/SWCY="
     },
@@ -183,8 +165,6 @@ TEST(WAICTManifestValidation, ValidManifestWithTransparencyProof)
 {
   WAICTManifest manifest;
   nsCString json(R"JSON({
-    "version": 1,
-    "integrity-policy": "sources=(inline)",
     "hashes": {
       "/script.js": "r4j9yW07mpTFSQ6ZRYOV0Au8Hfn2NqjqQMBqKL/SWCY="
     },
@@ -200,8 +180,6 @@ TEST(WAICTManifestValidation, ValidManifestWithAllOptionalFields)
 {
   WAICTManifest manifest;
   nsCString json(R"JSON({
-    "version": 1,
-    "integrity-policy": "sources=(inline)",
     "hashes": {
       "/script.js": "r4j9yW07mpTFSQ6ZRYOV0Au8Hfn2NqjqQMBqKL/SWCY="
     },
@@ -222,8 +200,6 @@ TEST(WAICTManifestValidation, InvalidJSON_Malformed)
 {
   WAICTManifest manifest;
   nsCString json(R"JSON({
-    "version": 1,
-    "integrity-policy": "sources=(inline)",
     "bt-server": "https://bt.example.com"
     "hashes": {
       "/script.js": "r4j9yW07mpTFSQ6ZRYOV0Au8Hfn2NqjqQMBqKL/SWCY="
@@ -255,47 +231,11 @@ TEST(WAICTManifestValidation, InvalidJSON_Empty)
   EXPECT_EQ(status, IntegrityPolicy::ManifestValidationStatus::InvalidJSON);
 }
 
-// Missing Required Fields
-
-TEST(WAICTManifestValidation, MissingVersion)
-{
-  WAICTManifest manifest;
-  nsCString json(R"JSON({
-    "integrity-policy": "sources=(inline)",
-    "bt-server": "https://bt.example.com",
-    "hashes": {
-      "/script.js": "r4j9yW07mpTFSQ6ZRYOV0Au8Hfn2NqjqQMBqKL/SWCY="
-    }
-  })JSON");
-
-  auto status = IntegrityPolicy::ValidateManifest(json, manifest);
-
-  EXPECT_EQ(status, IntegrityPolicy::ManifestValidationStatus::InvalidJSON);
-}
-
-TEST(WAICTManifestValidation, MissingIntegrityPolicy)
-{
-  WAICTManifest manifest;
-  nsCString json(R"JSON({
-    "version": 1,
-    "bt-server": "https://bt.example.com",
-    "hashes": {
-      "/script.js": "r4j9yW07mpTFSQ6ZRYOV0Au8Hfn2NqjqQMBqKL/SWCY="
-    }
-  })JSON");
-
-  auto status = IntegrityPolicy::ValidateManifest(json, manifest);
-
-  EXPECT_EQ(status, IntegrityPolicy::ManifestValidationStatus::InvalidJSON);
-}
-
 // We require at least one hash to be present
 TEST(WAICTManifestValidation, MissingBothHashesAndAnyHashes)
 {
   WAICTManifest manifest;
   nsCString json(R"JSON({
-    "version": 1,
-    "integrity-policy": "sources=(inline)"
   })JSON");
 
   auto status = IntegrityPolicy::ValidateManifest(json, manifest);
@@ -308,8 +248,6 @@ TEST(WAICTManifestValidation, EmptyHashesAndNoAnyHashes)
 {
   WAICTManifest manifest;
   nsCString json(R"JSON({
-    "version": 1,
-    "integrity-policy": "sources=(inline)",
     "hashes": {}
   })JSON");
 
@@ -322,8 +260,6 @@ TEST(WAICTManifestValidation, EmptyAnyHashesAndNoHashes)
 {
   WAICTManifest manifest;
   nsCString json(R"JSON({
-    "version": 1,
-    "integrity-policy": "sources=(inline)",
     "any_hashes": []
   })JSON");
 
@@ -336,8 +272,6 @@ TEST(WAICTManifestValidation, BothHashesAndAnyHashesEmpty)
 {
   WAICTManifest manifest;
   nsCString json(R"JSON({
-    "version": 1,
-    "integrity-policy": "sources=(inline)",
     "hashes": {},
     "any_hashes": []
   })JSON");
@@ -347,33 +281,12 @@ TEST(WAICTManifestValidation, BothHashesAndAnyHashesEmpty)
   EXPECT_EQ(status, IntegrityPolicy::ManifestValidationStatus::MissingHashes);
 }
 
-// Invalid Version
-
-TEST(WAICTManifestValidation, InvalidVersion_Zero)
-{
-  WAICTManifest manifest;
-  nsCString json(R"JSON({
-    "version": 0,
-    "integrity-policy": "sources=(inline)",
-    "bt-server": "https://bt.example.com",
-    "hashes": {
-      "/script.js": "r4j9yW07mpTFSQ6ZRYOV0Au8Hfn2NqjqQMBqKL/SWCY="
-    }
-  })JSON");
-
-  auto status = IntegrityPolicy::ValidateManifest(json, manifest);
-
-  EXPECT_EQ(status, IntegrityPolicy::ManifestValidationStatus::InvalidVersion);
-}
-
 // Invalid Hash Formats
 
 TEST(WAICTManifestValidation, InvalidHash_EmptyKey)
 {
   WAICTManifest manifest;
   nsCString json(R"JSON({
-    "version": 1,
-    "integrity-policy": "sources=(inline)",
     "bt-server": "https://bt.example.com",
     "hashes": {
       "": "r4j9yW07mpTFSQ6ZRYOV0Au8Hfn2NqjqQMBqKL/SWCY="
@@ -389,8 +302,6 @@ TEST(WAICTManifestValidation, InvalidHash_EmptyValue)
 {
   WAICTManifest manifest;
   nsCString json(R"JSON({
-    "version": 1,
-    "integrity-policy": "sources=(inline)",
     "bt-server": "https://bt.example.com",
     "hashes": {
       "/script.js": ""
@@ -406,8 +317,6 @@ TEST(WAICTManifestValidation, InvalidHash_TooShort)
 {
   WAICTManifest manifest;
   nsCString json(R"JSON({
-    "version": 1,
-    "integrity-policy": "sources=(inline)",
     "bt-server": "https://bt.example.com",
     "hashes": {
       "/script.js": "hashhash"
@@ -423,8 +332,6 @@ TEST(WAICTManifestValidation, InvalidHash_TooLong)
 {
   WAICTManifest manifest;
   nsCString json(R"JSON({
-    "version": 1,
-    "integrity-policy": "sources=(inline)",
     "bt-server": "https://bt.example.com",
     "hashes": {
       "/script.js": "r4j9yW07mpTFSQ6ZRYOV0Au8Hfn2NqjqQMBqKL/SWCY=extra"
@@ -440,8 +347,6 @@ TEST(WAICTManifestValidation, InvalidHash_InvalidBase64Characters)
 {
   WAICTManifest manifest;
   nsCString json(R"JSON({
-    "version": 1,
-    "integrity-policy": "sources=(inline)",
     "bt-server": "https://bt.example.com",
     "hashes": {
       "/script.js": "r4j9yW07mpT@SQ6ZRYOV0Au8Hfn2NqjqQMBqKL/SWCY="
@@ -458,8 +363,6 @@ TEST(WAICTManifestValidation, InvalidHash_WrongPaddingPosition)
 {
   WAICTManifest manifest;
   nsCString json(R"JSON({
-    "version": 1,
-    "integrity-policy": "sources=(inline)",
     "bt-server": "https://bt.example.com",
     "hashes": {
       "/script.js": "r4j9yW07mpTFSQ6ZRYOV0Au8Hfn2N=jqQMBqKL/SWCY"
@@ -476,8 +379,6 @@ TEST(WAICTManifestValidation, InvalidHash_43CharsWithPadding)
 {
   WAICTManifest manifest;
   nsCString json(R"JSON({
-    "version": 1,
-    "integrity-policy": "sources=(inline)",
     "bt-server": "https://bt.example.com",
     "hashes": {
       "/script.js": "r4j9yW07mpTFSQ6ZRYOV0Au8Hfn2NqjqQMBqKL/SWC="
@@ -493,8 +394,6 @@ TEST(WAICTManifestValidation, InvalidHash_44CharsWithoutPadding)
 {
   WAICTManifest manifest;
   nsCString json(R"JSON({
-    "version": 1,
-    "integrity-policy": "sources=(inline)",
     "bt-server": "https://bt.example.com",
     "hashes": {
       "/script.js": "r4j9yW07mpTFSQ6ZRYOV0Au8Hfn2NqjqQMBqKL/SWCYA"
@@ -510,8 +409,6 @@ TEST(WAICTManifestValidation, InvalidHash_OneHashInvalid)
 {
   WAICTManifest manifest;
   nsCString json(R"JSON({
-    "version": 1,
-    "integrity-policy": "sources=(inline)",
     "bt-server": "https://bt.example.com",
     "hashes": {
       "/valid.js": "r4j9yW07mpTFSQ6ZRYOV0Au8Hfn2NqjqQMBqKL/SWCY=",
@@ -529,8 +426,6 @@ TEST(WAICTManifestValidation, InvalidAnyHash_EmptyString)
 {
   WAICTManifest manifest;
   nsCString json(R"JSON({
-    "version": 1,
-    "integrity-policy": "sources=(inline)",
     "bt-server": "https://bt.example.com",
     "hashes": {
       "/script.js": "r4j9yW07mpTFSQ6ZRYOV0Au8Hfn2NqjqQMBqKL/SWCY="
@@ -548,8 +443,6 @@ TEST(WAICTManifestValidation, InvalidAnyHash_TooShort)
 {
   WAICTManifest manifest;
   nsCString json(R"JSON({
-    "version": 1,
-    "integrity-policy": "sources=(inline)",
     "bt-server": "https://bt.example.com",
     "hashes": {
       "/script.js": "r4j9yW07mpTFSQ6ZRYOV0Au8Hfn2NqjqQMBqKL/SWCY="
@@ -566,8 +459,6 @@ TEST(WAICTManifestValidation, InvalidAnyHash_OneValidOneInvalid)
 {
   WAICTManifest manifest;
   nsCString json(R"JSON({
-    "version": 1,
-    "integrity-policy": "sources=(inline)",
     "bt-server": "https://bt.example.com",
     "hashes": {
       "/script.js": "r4j9yW07mpTFSQ6ZRYOV0Au8Hfn2NqjqQMBqKL/SWCY="
@@ -594,8 +485,6 @@ TEST(WAICTManifestValidation, InvalidHash_VeryLongHash)
 
   nsCString json;
   json.Append(R"JSON({
-    "version": 1,
-    "integrity-policy": "sources=(inline)",
     "hashes": {
       "/script.js": ")JSON");
   json.Append(veryLongHash);
@@ -613,8 +502,6 @@ TEST(WAICTManifestValidation, InvalidHash_SpecialCharactersInKey)
 {
   WAICTManifest manifest;
   nsCString json(R"JSON({
-    "version": 1,
-    "integrity-policy": "sources=(inline)",
     "hashes": {
       "../../../etc/passwd": "r4j9yW07mpTFSQ6ZRYOV0Au8Hfn2NqjqQMBqKL/SWCY="
     }
@@ -636,8 +523,6 @@ TEST(WAICTManifestValidation, InvalidHash_VeryLongKey)
 
   nsCString json;
   json.Append(R"JSON({
-    "version": 1,
-    "integrity-policy": "sources=(inline)",
     "hashes": {
       ")JSON");
   json.Append(veryLongKey);
@@ -654,8 +539,6 @@ TEST(WAICTManifestValidation, InvalidHash_LeadingWhitespace)
 {
   WAICTManifest manifest;
   nsCString json(R"JSON({
-    "version": 1,
-    "integrity-policy": "sources=(inline)",
     "hashes": {
       "/script.js": " r4j9yW07mpTFSQ6ZRYOV0Au8Hfn2NqjqQMBqKL/SWCY="
     }
@@ -670,8 +553,6 @@ TEST(WAICTManifestValidation, InvalidHash_TrailingWhitespace)
 {
   WAICTManifest manifest;
   nsCString json(R"JSON({
-    "version": 1,
-    "integrity-policy": "sources=(inline)",
     "hashes": {
       "/script.js": "r4j9yW07mpTFSQ6ZRYOV0Au8Hfn2NqjqQMBqKL/SWCY= "
     }
@@ -686,8 +567,6 @@ TEST(WAICTManifestValidation, InvalidHash_EmbeddedWhitespace)
 {
   WAICTManifest manifest;
   nsCString json(R"JSON({
-    "version": 1,
-    "integrity-policy": "sources=(inline)",
     "hashes": {
       "/script.js": "r4j9yW07mpTFSQ6ZRYOV0Au8 Hfn2NqjqQMBqKL/SWCY="
     }
@@ -704,8 +583,6 @@ TEST(WAICTManifestValidation, InvalidHash_NullByte)
 {
   WAICTManifest manifest;
   nsCString json(R"JSON({
-    "version": 1,
-    "integrity-policy": "sources=(inline)",
     "hashes": {
       "/script.js": "r4j9yW07mpTFSQ6ZRYOV0Au8)JSON");
   json.Append('\0');
