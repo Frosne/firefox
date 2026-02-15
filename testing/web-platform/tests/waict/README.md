@@ -13,6 +13,7 @@ This directory contains Web Platform Tests for the WAICT specification, which pr
 - **`image-report-invalid-hash.https.html`** - Tests that invalid manifest (hash too long) generates reports even when `blocked-destinations=(script)` (report mode)
 - **`image-max-age-persist.https.html`** - Tests that WAICT policy persists within max-age period (downgrade protection)
 - **`image-max-age-expire.https.html`** - Tests that WAICT policy expires after max-age period
+- **`image-cross-origin-header-ignored.https.html`** - Tests that WAICT headers from cross-origin are ignored
 
 ### Script (and General) Tests
 - **`script-enforce.https.html`** - Tests script loading with WAICT policy in enforce mode
@@ -67,6 +68,14 @@ Each test suite covers the following scenarios:
    - Test loads a page with WAICT header (`max-age=1`), verifies image is blocked
    - Waits 2+ seconds, then loads the same page WITHOUT WAICT header, verifies policy expired and image now loads
    - AW: There is a patch in the file allowing to see the changes yourself
+
+TODO: Check if the test is correct
+### Origin Validation (Tested with Images, Enforce Mode)
+16. **Cross-origin WAICT headers are ignored** - `image-cross-origin-header-ignored.https.html`:
+   - Spec requirement: "We only care about this header if it's received from a path that matches the top-level origin. E.g. we're on foo.com and this header is set on the response for foo.com/index.html. We want to ignore this header if it's received from another origin, e.g. cdn.com/resource.js."
+   - Test loads a cross-origin iframe with WAICT header (enforce mode)
+   - Cross-origin iframe tries to load image with incorrect hash
+   - Expected: Image loads successfully (cross-origin WAICT header is ignored)
 
 ## Running the Tests
 
