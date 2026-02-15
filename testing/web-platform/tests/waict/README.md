@@ -14,6 +14,7 @@ This directory contains Web Platform Tests for the WAICT specification, which pr
 - **`image-max-age-persist.https.html`** - Tests that WAICT policy persists within max-age period (downgrade protection)
 - **`image-max-age-expire.https.html`** - Tests that WAICT policy expires after max-age period
 - **`image-cross-origin-header-ignored.https.html`** - Tests that WAICT headers from cross-origin are ignored
+- **`image-top-level-policy-applies-cross-origin.https.html`** - Tests that top-level WAICT policy applies to resources loaded by cross-origin iframes
 
 ### Script (and General) Tests
 - **`script-enforce.https.html`** - Tests script loading with WAICT policy in enforce mode
@@ -76,6 +77,11 @@ TODO: Check if the test is correct
    - Test loads a cross-origin iframe with WAICT header (enforce mode)
    - Cross-origin iframe tries to load image with incorrect hash
    - Expected: Image loads successfully (cross-origin WAICT header is ignored)
+
+17. **Top-level WAICT policy applies to cross-origin contexts** - `image-top-level-policy-applies-cross-origin.https.html`:
+   - Spec requirement: "This information is partitioned to this top level origin and impacts all (active content) resource loads for this top level origin (including sub resources on third-party sites)."
+   - Top-level page with WAICT policy, cross-origin iframe loads main-origin image with incorrect hash
+   - Expected: Image blocked (top-level policy applies to all resources in page context)
 
 ## Running the Tests
 
