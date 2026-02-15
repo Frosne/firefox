@@ -6,8 +6,6 @@
 
 [GenerateInitFromJSON]
 dictionary WAICTManifest {
-  required unsigned long version;
-  required DOMString integrity-policy;
   DOMString bt-server;
   record<DOMString, DOMString> hashes;
   sequence<DOMString> any_hashes;
