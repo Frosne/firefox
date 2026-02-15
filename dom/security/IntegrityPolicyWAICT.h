@@ -47,8 +47,6 @@ class IntegrityPolicyWAICT : public nsIStreamLoaderObserver {
   enum class ManifestValidationStatus : uint8_t {
     OK,
     InvalidJSON,
-    MissingVersion,
-    InvalidVersion,
     MissingHashes,
     InvalidHashFormat
   };

@@ -272,14 +272,6 @@ IntegrityPolicyWAICT::ValidateManifest(const nsACString& aManifestJSON,
     return ManifestValidationStatus::InvalidJSON;
   }
 
-  if (aOutManifest.mVersion != 1) {
-    if (aPolicy) {
-      aPolicy->ReportMessage(nsIScriptError::errorFlag, "WAICT"_ns,
-                             "WAICTManifestWrongVersion", {});
-    }
-    return ManifestValidationStatus::InvalidVersion;
-  }
-
   bool hasHashes = aOutManifest.mHashes.WasPassed() &&
                    !aOutManifest.mHashes.Value().Entries().IsEmpty();
   bool hasAnyHashes = aOutManifest.mAny_hashes.WasPassed() &&
@@ -347,8 +339,7 @@ NS_IMETHODIMP IntegrityPolicyWAICT::OnStreamComplete(nsIStreamLoader* aLoader,
   }
 
   MOZ_LOG_FMT(gWaictLog, LogLevel::Debug,
-              "Manifest validation successfull, version = {}",
-              manifest.mVersion);
+              "Manifest validation successful");
 
   if (mDocument && mDocument->GetDocumentURI()) {
     if (WindowGlobalChild* wgc = mDocument->GetWindowGlobalChild()) {
