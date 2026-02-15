@@ -9,6 +9,7 @@
 #include "WAICTLog.h"
 #include "WAICTUtils.h"
 #include "mozilla/Logging.h"
+#include "mozilla/StaticPrefs_security.h"
 #include "mozilla/dom/Document.h"
 #include "mozilla/dom/IntegrityViolationReportBody.h"
 #include "mozilla/dom/ReportingUtils.h"
@@ -124,6 +125,10 @@ nsresult IntegrityPolicyWAICT::Create(Document* aDocument,
                                       const nsACString& aHeader,
                                       IntegrityPolicyWAICT** aPolicy) {
   NS_ENSURE_ARG_POINTER(aDocument);
+
+  if (!StaticPrefs::security_waict_enabled()) {
+    return NS_OK;
+  }
 
   if (aHeader.IsEmpty()) {
     return NS_OK;
