@@ -6,11 +6,11 @@ This directory contains Web Platform Tests for the WAICT specification, which pr
 
 ### Image Tests
 - **`image-enforce.https.html`** - Tests image loading with WAICT policy in enforce mode (blocks non-compliant resources)
-- **`image-audit.https.html`** - Tests image loading with WAICT policy in audit mode (allows resources but reports violations)
+- **`image-report.https.html`** - Tests image loading with WAICT policy in report mode (allows resources but reports violations)
 
 ### Script Tests
 - **`script-enforce.https.html`** - Tests script loading with WAICT policy in enforce mode
-- **`script-audit.https.html`** - Tests script loading with WAICT policy in audit mode
+- **`script-report.https.html`** - Tests script loading with WAICT policy in report mode
 
 ## Test Scenarios
 
@@ -20,24 +20,23 @@ Each test suite covers the following scenarios:
 1. **Correct hash in hashes section** - Resource with matching hash in manifest's `hashes` section should load without generating violation reports
 2. **Incorrect hash in hashes section** - Resource with non-matching hash should:
    - In enforce mode: fail to load and generate violation report
-   - In audit mode: load successfully but generate violation report
+   - In report mode: load successfully but generate violation report
 3. **Correct hash in any_hashes section** - Resource with matching hash in manifest's `any_hashes` (wildcard) section should load without generating violation reports
 4. **Incorrect hash in any_hashes section** - Resource with non-matching hash in wildcards should:
    - In enforce mode: fail to load and generate violation report
-   - In audit mode: load successfully but generate violation report
+   - In report mode: load successfully but generate violation report
 5. **Resource not in manifest** - Resource not listed in manifest at all should:
    - In enforce mode: fail to load and generate violation report
-   - In audit mode: load successfully but generate violation report
+   - In report mode: load successfully but generate violation report
 
 ### Policy Validation Scenarios (tested with scripts)
 These scenarios test WAICT policy and manifest validation. While they apply to all resource types, they are currently only tested with scripts.
 
 6. **Missing integrity-policy field** - Manifest without required `integrity-policy` field should:
-   - In enforce mode: allow resource to load but generate violation report
-   - In audit mode: allow resource to load but generate violation report
+   - In enforce mode: block resource and generate violation report
+   - In report mode: allow resource to load and generate violation report
 7. **Missing mode parameter** - Header missing required `mode` parameter should:
-   - In enforce mode: allow resource to load but generate violation report
-   - In audit mode: allow resource to load but generate violation report
+   - WAICT is disabled: resource loads normally without any reports
 
 ## Running the Tests
 
@@ -51,13 +50,13 @@ To run specific test files:
 
 ```bash
 ./mach wpt testing/web-platform/tests/waict/image-enforce.https.html
-./mach wpt testing/web-platform/tests/waict/script-audit.https.html
+./mach wpt testing/web-platform/tests/waict/script-report.https.html
 ```
 
 ## Test Modes
 
 - **Enforce mode** (`mode=enforce`): Resources that fail integrity checks are blocked from loading
-- **Audit mode** (`mode=report`): Resources that fail integrity checks are allowed to load but violations are reported via the Reporting API
+- **Report mode** (`mode=report`): Resources that fail integrity checks are allowed to load but violations are reported via the Reporting API
 
 ## Notes
 

@@ -6,13 +6,20 @@
 <script src="resources/waict-test-helpers.js"></script>
 <body>
 <script>
-
+    // In this file we have 2 types of tests: 
+    // 1) Specifically the tests that are related to scripts
+    // 2) General cases tests, for example, wrong headers. 
+    // 
     // Currently supported test scenarios:
     // 1. Script with correct hash present in the manifest in the hashes section
     // 2. Script with incorrect hash present in the manifest in the hashes section
     // 3. Script with hash present in the manifest in the any_hashes section
     // 4. Script with incorrect hash in the any_hashes section
     // 5. Script not present in the manifest at all
+    //     
+    // General cases tests: 
+    //   6. Wrong manifest - missing integrity policy
+    //   7. Wrong header - missing mode field
 
   // Test 1: Script with the correct hash in hashes is executed. 
 
@@ -115,6 +122,7 @@
   // Integrity-Policy-WAICT-v1: manifest="waict-manifest.json", blocked-destinations=(script)
   // Missing required field "mode"
   // TODO: Add error code
+  // When header parsing fails, WAICT is not enforced at all
   promise_test(async t => {
     const result = await loadScriptInIframe(
       'resources/iframe-with-no-mode.html',
@@ -122,11 +130,11 @@
     );
 
     // NB: the hash in the manifest is still correct
-    assert_false(result.loaded, 'Script should not load when header is missing field in the header');
-    assert_false(result.ran, 'Script should not execute when header is missing field in the header');
+    assert_true(result.loaded, 'Script should load when header is malformed (WAICT disabled)');
+    assert_true(result.ran, 'Script should execute when header is malformed (WAICT disabled)');
 
-    // Check integrity violation reports
-    checkIntegrityViolationReport(result.reports, 'correct.js', false);
-  }, 'Script should not load and generate violation when header is missing a header field');
+    // No reports should be generated when WAICT is disabled
+    assert_equals(result.reports.length, 0, 'Should not generate reports when WAICT is disabled due to header parsing failure');
+  }, 'Script should load without reports when header is missing mode parameter (WAICT disabled)');
 </script>
 </body>
