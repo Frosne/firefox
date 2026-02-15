@@ -44,6 +44,10 @@ Each test suite covers the following scenarios:
    - Manifest is valid: resource loads normally without any reports in both modes
 9. **Empty blocked-destinations** - Header with empty `blocked-destinations=()` should:
    - No resource types blocked: resource loads normally without any reports in both modes
+12. **Missing optional preload field** - Header without optional `preload` field, testing with incorrect hash:
+   - WAICT still functions: resource with incorrect hash is blocked in enforce mode, loads with report in report mode
+13. **Nonexistent manifest file** - Header with `manifest` pointing to file that doesn't exist:
+   - WAICT is disabled: resource loads normally without any reports in both modes
 
 #### Tested with Images
 10. **Resource type not in blocked-destinations** - Header with `blocked-destinations=(script)` and manifest contains image hashes:
