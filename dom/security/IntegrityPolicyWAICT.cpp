@@ -418,10 +418,9 @@ void IntegrityPolicyWAICT::FetchManifest() {
     return;
   }
 
-  // TODO: Proper principal/loadgroup etc.
   nsCOMPtr<nsIStreamLoader> loader;
   rv = NS_NewStreamLoader(
-      getter_AddRefs(loader), uri, this, nsContentUtils::GetSystemPrincipal(),
+      getter_AddRefs(loader), uri, this, mDocument->NodePrincipal(),
       nsILoadInfo::SEC_ALLOW_CROSS_ORIGIN_SEC_CONTEXT_IS_NULL,
       nsIContentPolicy::TYPE_OTHER);
   if (NS_FAILED(rv)) {
