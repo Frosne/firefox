@@ -46,12 +46,14 @@ bool IntegrityPolicyWAICT::MaybeCheckResourceIntegrity(
 
   // If manifest failed to load/validate, decision depends on mode
   if (!mManifestValid) {
+    ReportViolation(aURI, aDestination,
+                    IntegrityViolationReason::Invalid_manifest);
+
     if (mEnforce) {
       MOZ_LOG_FMT(
           gWaictLog, LogLevel::Warning,
           "IntegrityPolicyWAICT::MaybeCheckResourceIntegrity: Manifest not "
           "valid, enforce mode - blocking");
-      ReportViolation(aURI, aDestination);
       return false;
     }
     MOZ_LOG_FMT(
@@ -79,7 +81,8 @@ bool IntegrityPolicyWAICT::MaybeCheckResourceIntegrity(
                                        NS_ConvertUTF8toUTF16(aHash)};
           ReportMessage(nsIScriptError::errorFlag, "WAICT"_ns,
                         "WAICTHashMismatch", params);
-          ReportViolation(aURI, aDestination);
+          ReportViolation(aURI, aDestination,
+                          IntegrityViolationReason::No_manifest_match);
           return false;
         }
 
@@ -111,7 +114,8 @@ bool IntegrityPolicyWAICT::MaybeCheckResourceIntegrity(
                                NS_ConvertUTF8toUTF16(aHash)};
   ReportMessage(nsIScriptError::errorFlag, "WAICT"_ns,
                 "WAICTResourceNotInManifest", params);
-  ReportViolation(aURI, aDestination);
+  ReportViolation(aURI, aDestination,
+                  IntegrityViolationReason::Missing_from_manifest);
   return false;
 }
 
@@ -464,7 +468,8 @@ void IntegrityPolicyWAICT::ReportMessage(uint32_t aErrorFlags,
 }
 
 void IntegrityPolicyWAICT::ReportViolation(
-    nsIURI* aURI, IntegrityPolicy::DestinationType aDestination) const {
+    nsIURI* aURI, IntegrityPolicy::DestinationType aDestination,
+    IntegrityViolationReason aReason) const {
   if (!mDocument) {
     return;
   }
@@ -503,7 +508,8 @@ void IntegrityPolicyWAICT::ReportViolation(
   for (const nsCString& endpoint : mEndpoints) {
     RefPtr<IntegrityViolationReportBody> body =
         new IntegrityViolationReportBody(global, documentURL, blockedURL,
-                                         destination, !mEnforce);
+                                         destination, !mEnforce,
+                                         Nullable(aReason));
 
     ReportingUtils::Report(global, nsGkAtoms::integrity_violation,
                            NS_ConvertUTF8toUTF16(endpoint), documentURLUTF16,
