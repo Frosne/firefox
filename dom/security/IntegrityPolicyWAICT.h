@@ -72,6 +72,8 @@ class IntegrityPolicyWAICT : public nsIStreamLoaderObserver {
                      const char* aMessageName,
                      const nsTArray<nsString>& aParams);
 
+  void ReportViolation(nsIURI* aURI,
+                       IntegrityPolicy::DestinationType aDestination) const;
 
   RefPtr<Document> mDocument;
 
