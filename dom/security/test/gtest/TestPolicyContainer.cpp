@@ -26,8 +26,9 @@ void AssertSerializationForHeadersForPolicyContainer(
 
   if (!aIntegrityPolicyHeader.IsVoid()) {
     RefPtr<IntegrityPolicy> integrityPolicy;
-    nsresult rv = IntegrityPolicy::ParseHeaders(
-        aIntegrityPolicyHeader, ""_ns, getter_AddRefs(integrityPolicy));
+    nsresult rv =
+        IntegrityPolicy::ParseHeaders(aIntegrityPolicyHeader, ""_ns, ""_ns,
+                                      nullptr, getter_AddRefs(integrityPolicy));
     ASSERT_TRUE(NS_SUCCEEDED(rv));
     ASSERT_TRUE(integrityPolicy);
 
