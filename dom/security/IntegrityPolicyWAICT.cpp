@@ -360,6 +360,13 @@ NS_IMETHODIMP IntegrityPolicyWAICT::OnStreamComplete(nsIStreamLoader* aLoader,
               "Manifest validation successfull, version = {}",
               manifest.mVersion);
 
+  if (mDocument && mDocument->GetDocumentURI()) {
+    if (WindowGlobalChild* wgc = mDocument->GetWindowGlobalChild()) {
+      wgc->SendSetSiteIntegrityProtected(
+          WrapNotNull(mDocument->GetDocumentURI()), mMaxAge);
+    }
+  }
+
   if (manifest.mHashes.WasPassed()) {
     MOZ_ASSERT(mHashes.IsEmpty());
     for (const auto& entry : manifest.mHashes.Value().Entries()) {
