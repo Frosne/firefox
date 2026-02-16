@@ -53,6 +53,7 @@
 #include "mozilla/dom/DocumentInlines.h"  // Document::GetPresContext
 #include "mozilla/dom/Element.h"
 #include "mozilla/dom/FetchPriority.h"
+#include "mozilla/dom/IntegrityPolicy.h"
 #include "mozilla/dom/JSExecutionUtils.h"  // mozilla::dom::Compile, mozilla::dom::InstantiateStencil, mozilla::dom::EvaluationExceptionToNSResult
 #include "mozilla/dom/PolicyContainer.h"
 #include "mozilla/dom/RequestBinding.h"
@@ -994,6 +995,13 @@ nsresult ScriptLoader::StartLoadInternal(
     return NS_ERROR_FAILURE;
   }
 
+  IntegrityPolicyWAICT* policy =
+      PolicyContainer::GetIntegrityPolicyWAICT(mDocument->GetPolicyContainer());
+  if (policy &&
+      policy->ShouldHandle(IntegrityPolicy::DestinationType::Script)) {
+    aRequest->mFetchSourceOnly = true;
+  }
+
   ScriptLoader::PrepareCacheInfoChannel(channel, aRequest);
 
   LOG(("ScriptLoadRequest (%p): mode=%u tracking=%d", aRequest,
@@ -1803,6 +1811,13 @@ ScriptLoadRequest* ScriptLoader::LookupPreloadRequest(
   RefPtr<ScriptLoadRequest> request = mPreloads[i].mRequest;
   if (aScriptKind != request->mKind) {
     return nullptr;
+  }
+
+  if (auto* policy = PolicyContainer::GetIntegrityPolicyWAICT(
+          mDocument->GetPolicyContainer())) {
+    if (policy->ShouldHandle(IntegrityPolicy::DestinationType::Script)) {
+      return nullptr;
+    }
   }
 
   // Found preloaded request. Note that a script-inserted script can steal a
