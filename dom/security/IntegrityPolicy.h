@@ -76,6 +76,12 @@ class IntegrityPolicy : public nsIIntegrityPolicy {
   static bool Equals(const IntegrityPolicy* aPolicy,
                      const IntegrityPolicy* aOtherPolicy);
 
+  static Result<IntegrityPolicy::Destinations, nsresult> ParseDestinations(
+      nsISFVDictionary* aDict, bool aIsWAICT);
+
+  static Result<nsTArray<nsCString>, nsresult> ParseEndpoints(
+      nsISFVDictionary* aDict);
+
  protected:
   virtual ~IntegrityPolicy() = default;
 

@@ -76,9 +76,12 @@ class IntegrityPolicyWAICT : public nsIStreamLoaderObserver {
                        IntegrityPolicy::DestinationType aDestination) const;
 
   RefPtr<Document> mDocument;
+
   nsCString mManifestURL;
   uint64_t mMaxAge = 0;
   IntegrityPolicy::Destinations mDestinations;
+  nsTArray<nsCString> mEndpoints;
+
   RefPtr<WAICTManifestLoadedPromise::Private> mPromise;
   bool mEnforce = false;
   bool mManifestValid = false;

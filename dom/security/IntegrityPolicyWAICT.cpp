@@ -21,9 +21,6 @@ using namespace mozilla;
 
 namespace mozilla::dom {
 
-Result<IntegrityPolicy::Destinations, nsresult> ParseDestinations(
-    nsISFVDictionary* aDict, bool aIsWAICT);
-
 NS_IMPL_ISUPPORTS(IntegrityPolicyWAICT, nsIStreamLoaderObserver)
 
 IntegrityPolicyWAICT::~IntegrityPolicyWAICT() {
@@ -158,28 +155,41 @@ nsresult IntegrityPolicyWAICT::ParseHeader(const nsACString& aHeader) {
     return rv;
   }
 
-  auto destinationsResult = ParseDestinations(dict, /* aIsWAICT */ true);
+  auto destinationsResult =
+      IntegrityPolicy::ParseDestinations(dict, /* aIsWAICT */ true);
   if (destinationsResult.isErr()) {
     MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
-                "ParseHeader: ParseDestinations failed");
+                "ParseHeader: IntegrityPolicy::ParseDestinations failed");
 
-    nsTArray<nsString> params = {NS_ConvertUTF8toUTF16(aHeader)};
+    nsTArray<nsString> params = {NS_ConvertUTF8toUTF16(aHeader), u"destinations"_ns};
     ReportMessage(nsIScriptError::errorFlag, "WAICT"_ns,
-                  "WAICTHeaderBlockedDestinationsParseError", params);
+                  "WAICTHeaderFieldParseError", params);
 
     return destinationsResult.unwrapErr();
   }
-
   mDestinations = destinationsResult.unwrap();
+
+  auto endpointsResult = IntegrityPolicy::ParseEndpoints(dict);
+  if (endpointsResult.isErr()) {
+    MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
+                "ParseHeader: IntegrityPolicy::ParseEndpoints failed");
+
+    nsTArray<nsString> params = {NS_ConvertUTF8toUTF16(aHeader), u"endpoints"_ns};
+    ReportMessage(nsIScriptError::errorFlag, "WAICT"_ns,
+                  "WAICTHeaderFieldParseError", params);
+
+    return endpointsResult.unwrapErr();
+  }
+  mEndpoints = endpointsResult.unwrap();
 
   rv = waict::ParseMaxAge(dict, &mMaxAge);
   if (NS_FAILED(rv)) {
     MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
                 "ParseHeader: waict::ParseMaxAge failed");
 
-    nsTArray<nsString> params = {NS_ConvertUTF8toUTF16(aHeader)};
+    nsTArray<nsString> params = {NS_ConvertUTF8toUTF16(aHeader), u"max-age"_ns};
     ReportMessage(nsIScriptError::errorFlag, "WAICT"_ns,
-                  "WAICTHeaderMaxAgeParseError", params);
+                  "WAICTHeaderFieldParseError", params);
 
     return rv;
   }
@@ -490,11 +500,15 @@ void IntegrityPolicyWAICT::ReportViolation(
       break;
   }
 
-  RefPtr<IntegrityViolationReportBody> body = new IntegrityViolationReportBody(
-      global, documentURL, blockedURL, destination, !mEnforce);
+  for (const nsCString& endpoint : mEndpoints) {
+    RefPtr<IntegrityViolationReportBody> body =
+        new IntegrityViolationReportBody(global, documentURL, blockedURL,
+                                         destination, !mEnforce);
 
-  ReportingUtils::Report(global, nsGkAtoms::integrity_violation, u"default"_ns,
-                         documentURLUTF16, body);
+    ReportingUtils::Report(global, nsGkAtoms::integrity_violation,
+                           NS_ConvertUTF8toUTF16(endpoint), documentURLUTF16,
+                           body);
+  }
 }
 
 bool IntegrityPolicyWAICT::Equals(const IntegrityPolicyWAICT* aWaict,
