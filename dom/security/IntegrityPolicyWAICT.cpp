@@ -413,7 +413,7 @@ void IntegrityPolicyWAICT::FetchManifest() {
   rv = NS_NewStreamLoader(
       getter_AddRefs(loader), uri, this, mDocument->NodePrincipal(),
       nsILoadInfo::SEC_ALLOW_CROSS_ORIGIN_SEC_CONTEXT_IS_NULL,
-      nsIContentPolicy::TYPE_OTHER);
+      nsIContentPolicy::TYPE_OTHER, mDocument->GetDocumentLoadGroup());
   if (NS_FAILED(rv)) {
     MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
                 "Could not fetch manifest URL: rv = {}",
