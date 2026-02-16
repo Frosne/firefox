@@ -3739,6 +3739,7 @@ nsresult Document::StartDocumentLoad(const char* aCommand, nsIChannel* aChannel,
   NS_ENSURE_SUCCESS(rv, rv);
 
   rv = InitIntegrityPolicyWAICT(aChannel);
+  NS_ENSURE_SUCCESS(rv, rv);
 
   rv = InitDocPolicy(aChannel);
   NS_ENSURE_SUCCESS(rv, rv);
