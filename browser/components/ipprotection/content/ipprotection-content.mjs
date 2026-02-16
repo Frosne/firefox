@@ -5,9 +5,9 @@
 import { MozLitElement } from "chrome://global/content/lit-utils.mjs";
 import { html, ifDefined } from "chrome://global/content/vendor/lit.all.mjs";
 import {
+  BANDWIDTH,
   LINKS,
   ERRORS,
-  BANDWIDTH,
 } from "chrome://browser/content/ipprotection/ipprotection-constants.mjs";
 
 // eslint-disable-next-line import/no-unassigned-import
@@ -180,9 +180,15 @@ export default class IPProtectionContentElement extends MozLitElement {
       this.state.error = "";
 
       if (this.state.bandwidthWarning) {
+        const threshold = Services.prefs.getIntPref(
+          "browser.ipProtection.bandwidthThreshold",
+          0
+        );
         this.dispatchEvent(
           new CustomEvent("IPProtection:DismissBandwidthWarning", {
             bubbles: true,
+            composed: true,
+            detail: { threshold },
           })
         );
       }

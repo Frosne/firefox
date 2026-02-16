@@ -1793,11 +1793,7 @@ pref("extensions.manifestV2.actionsPopupURLRestricted", false);
   pref("extensions.backgroundServiceWorker.enabled", false, locked);
 #endif
 // Whether to enable the updated openPopup API.
-#ifdef NIGHTLY_BUILD
-  pref("extensions.openPopupWithoutUserGesture.enabled", true);
-#else
-  pref("extensions.openPopupWithoutUserGesture.enabled", false);
-#endif
+pref("extensions.openPopupWithoutUserGesture.enabled", true);
 // Install origins restriction.
 pref("extensions.install_origins.enabled", false);
 
@@ -3327,8 +3323,8 @@ pref("urlclassifier.trackingAnnotationWhitelistTable", "moztest-trackwhite-simpl
 pref("urlclassifier.trackingTable", "moztest-track-simple,ads-track-digest256,social-track-digest256,analytics-track-digest256");
 pref("urlclassifier.trackingWhitelistTable", "moztest-trackwhite-simple,mozstd-trackwhite-digest256,google-trackwhite-digest256");
 
-pref("urlclassifier.features.harmfuladdon.blocklistTables", "harmfuladdon-block-digest256");
-pref("urlclassifier.features.harmfuladdon.entitylistTables", "harmfuladdon-entitylist-digest256");
+pref("urlclassifier.features.harmfuladdonV2.blocklistTables", "harmfuladdon-block-digest256");
+pref("urlclassifier.features.harmfuladdonV2.entitylistTables", "harmfuladdon-entitylist-digest256");
 pref("urlclassifier.features.fingerprinting.blacklistTables", "base-fingerprinting-track-digest256");
 pref("urlclassifier.features.fingerprinting.whitelistTables", "mozstd-trackwhite-digest256,google-trackwhite-digest256");
 pref("urlclassifier.features.fingerprinting.annotate.blacklistTables", "base-fingerprinting-track-digest256");

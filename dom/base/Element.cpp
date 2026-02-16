@@ -78,6 +78,7 @@
 #include "mozilla/dom/ChildIterator.h"
 #include "mozilla/dom/CloseWatcher.h"
 #include "mozilla/dom/CustomElementRegistry.h"
+#include "mozilla/dom/DOMIntersectionObserver.h"
 #include "mozilla/dom/DOMRect.h"
 #include "mozilla/dom/DirectionalityUtils.h"
 #include "mozilla/dom/Document.h"
@@ -1182,6 +1183,63 @@ Element::Loading Element::LoadingState() const {
   return static_cast<Loading>(val->GetEnumValue());
 }
 
+MOZ_ALWAYS_INLINE void AssertNotObservedByLazyLoadObserver(Element& aElement) {
+  MOZ_ASSERT_IF(
+      aElement.OwnerDoc()->GetLazyLoadObserver(),
+      !aElement.OwnerDoc()->GetLazyLoadObserver()->Observes(aElement));
+}
+
+bool Element::MaybeStartLazyLoading() {
+  // https://html.spec.whatwg.org/#will-lazy-load-element-steps:
+  //
+  //   If scripting is disabled for element, then return false.
+  //
+  // We do the same for printing docs since they are also static.
+  auto* doc = OwnerDoc();
+  if (!doc->IsScriptEnabled() || doc->IsStaticDocument()) {
+    AssertNotObservedByLazyLoadObserver(*this);
+    return false;
+  }
+  if (IsInComposedDoc()) {
+    doc->EnsureLazyLoadObserver().Observe(*this);
+  }
+  return true;
+}
+
+void Element::StopLazyLoading() {
+  if (!IsInComposedDoc()) {
+    AssertNotObservedByLazyLoadObserver(*this);
+    return;
+  }
+  auto* observer = OwnerDoc()->GetLazyLoadObserver();
+  if (!observer) [[unlikely]] {
+    MOZ_ASSERT_UNREACHABLE("Forgot to call LazyLoadingElementBindToTree?");
+    return;
+  }
+  observer->Unobserve(*this);
+}
+
+void Element::LazyLoadingElementBindToTree(BindContext& aContext) {
+  if (!aContext.InComposedDoc()) {
+    AssertNotObservedByLazyLoadObserver(*this);
+    return;
+  }
+  aContext.OwnerDoc().EnsureLazyLoadObserver().Observe(*this);
+}
+
+void Element::LazyLoadingElementUnbindFromTree(UnbindContext& aContext) {
+  if (!aContext.WasInComposedDoc()) {
+    AssertNotObservedByLazyLoadObserver(*this);
+    return;
+  }
+  auto* observer = aContext.OwnerDoc().GetLazyLoadObserver();
+  if (!observer) [[unlikely]] {
+    MOZ_ASSERT_UNREACHABLE("Forgot to call LazyLoadingElementBindToTree?");
+    return;
+  }
+  observer->Unobserve(*this);
+}
+
 namespace {
 // <https://html.spec.whatwg.org/multipage/urls-and-fetching.html#fetch-priority-attributes>.
 static constexpr nsAttrValue::EnumTableEntry kFetchPriorityEnumTable[] = {
@@ -1393,9 +1451,7 @@ already_AddRefed<ShadowRoot> Element::AttachShadowWithoutNameChecks(
   nsAutoScriptBlocker scriptBlocker;
 
   auto* nim = mNodeInfo->NodeInfoManager();
-  RefPtr<mozilla::dom::NodeInfo> nodeInfo =
-      nim->GetNodeInfo(nsGkAtoms::documentFragmentNodeName, nullptr,
-                       kNameSpaceID_None, DOCUMENT_FRAGMENT_NODE);
+  RefPtr<mozilla::dom::NodeInfo> nodeInfo = nim->GetDocumentFragmentNodeInfo();
 
   // If there are no children, the flat tree is not changing due to the presence
   // of the shadow root, so we don't need to invalidate style / layout.

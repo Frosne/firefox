@@ -10,6 +10,8 @@
 #include "WAICTUtils.h"
 #include "mozilla/Logging.h"
 #include "mozilla/dom/Document.h"
+#include "mozilla/dom/IntegrityViolationReportBody.h"
+#include "mozilla/dom/ReportingUtils.h"
 #include "mozilla/dom/WindowGlobalChild.h"
 #include "mozilla/net/SFVService.h"
 #include "nsContentUtils.h"
@@ -18,9 +20,6 @@
 using namespace mozilla;
 
 namespace mozilla::dom {
-
-Result<IntegrityPolicy::Destinations, nsresult> ParseDestinations(
-    nsISFVDictionary* aDict, bool aIsWAICT);
 
 NS_IMPL_ISUPPORTS(IntegrityPolicyWAICT, nsIStreamLoaderObserver)
 
@@ -38,7 +37,8 @@ IntegrityPolicyWAICT::WaitForManifestLoad() {
 }
 
 bool IntegrityPolicyWAICT::MaybeCheckResourceIntegrity(
-    nsIURI* aURI, const nsACString& aHash, Document* aDocument) {
+    nsIURI* aURI, IntegrityPolicy::DestinationType aDestination,
+    const nsACString& aHash, Document* aDocument) {
   MOZ_LOG_FMT(
       gWaictLog, LogLevel::Debug,
       "IntegrityPolicyWAICT::MaybeCheckResourceIntegrity aURI = {} aHash = {}",
@@ -51,6 +51,7 @@ bool IntegrityPolicyWAICT::MaybeCheckResourceIntegrity(
           gWaictLog, LogLevel::Warning,
           "IntegrityPolicyWAICT::MaybeCheckResourceIntegrity: Manifest not "
           "valid, enforce mode - blocking");
+      ReportViolation(aURI, aDestination);
       return false;
     }
     MOZ_LOG_FMT(
@@ -67,7 +68,8 @@ bool IntegrityPolicyWAICT::MaybeCheckResourceIntegrity(
       if (auto hashValue = mHashes.Lookup(path)) {
         if (*hashValue != aHash) {
           MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
-                      "IntegrityPolicyWAICT::MaybeCheckResourceIntegrity: Wrong hash for path "
+                      "IntegrityPolicyWAICT::MaybeCheckResourceIntegrity: "
+                      "Wrong hash for path "
                       "({} != {})",
                       *hashValue, nsCString(aHash));
 
@@ -76,13 +78,15 @@ bool IntegrityPolicyWAICT::MaybeCheckResourceIntegrity(
                                        NS_ConvertUTF8toUTF16(*hashValue),
                                        NS_ConvertUTF8toUTF16(aHash)};
           ReportMessage(nsIScriptError::errorFlag, "WAICT"_ns,
-                        "WAICTManifestInvalidHash", params);
+                        "WAICTHashMismatch", params);
+          ReportViolation(aURI, aDestination);
           return false;
         }
 
-        MOZ_LOG_FMT(gWaictLog, LogLevel::Info,
-                    "IntegrityPolicyWAICT::MaybeCheckResourceIntegrity: Correct hash "
-                    "(path-based)");
+        MOZ_LOG_FMT(
+            gWaictLog, LogLevel::Info,
+            "IntegrityPolicyWAICT::MaybeCheckResourceIntegrity: Correct hash "
+            "(path-based)");
         return true;
       }
     }
@@ -91,13 +95,15 @@ bool IntegrityPolicyWAICT::MaybeCheckResourceIntegrity(
   if (!mAnyHashes.IsEmpty()) {
     if (mAnyHashes.Contains(aHash)) {
       MOZ_LOG_FMT(gWaictLog, LogLevel::Info,
-                  "IntegrityPolicyWAICT::MaybeCheckResourceIntegrity: Hash found in any_hashes");
+                  "IntegrityPolicyWAICT::MaybeCheckResourceIntegrity: Hash "
+                  "found in any_hashes");
       return true;
     }
   }
 
   MOZ_LOG_FMT(gWaictLog, LogLevel::Debug,
-              "IntegrityPolicyWAICT::MaybeCheckResourceIntegrity: Hash not found in either "
+              "IntegrityPolicyWAICT::MaybeCheckResourceIntegrity: Hash not "
+              "found in either "
               "lookup");
 
   nsCString spec = aURI->GetSpecOrDefault();
@@ -105,6 +111,7 @@ bool IntegrityPolicyWAICT::MaybeCheckResourceIntegrity(
                                NS_ConvertUTF8toUTF16(aHash)};
   ReportMessage(nsIScriptError::errorFlag, "WAICT"_ns,
                 "WAICTResourceNotInManifest", params);
+  ReportViolation(aURI, aDestination);
   return false;
 }
 
@@ -120,8 +127,11 @@ nsresult IntegrityPolicyWAICT::Create(Document* aDocument,
 
   RefPtr<IntegrityPolicyWAICT> policy = new IntegrityPolicyWAICT(aDocument);
 
-  MOZ_TRY(policy->ParseHeader(aHeader));
-  policy->FetchManifest();
+  // We can't propagate the error here, because we would never flush
+  // the console messages.
+  if (NS_SUCCEEDED(policy->ParseHeader(aHeader))) {
+    policy->FetchManifest();
+  }
 
   policy.forget(aPolicy);
   return NS_OK;
@@ -137,7 +147,7 @@ nsresult IntegrityPolicyWAICT::ParseHeader(const nsACString& aHeader) {
   nsresult rv = sfv->ParseDictionary(aHeader, getter_AddRefs(dict));
   if (NS_FAILED(rv)) {
     MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
-                "IntegrityPolicyWAICT::Initialize: ParseDictionary failed");
+                "ParseHeader: ParseDictionary failed");
 
     nsTArray<nsString> params = {NS_ConvertUTF8toUTF16(aHeader)};
     ReportMessage(nsIScriptError::errorFlag, "WAICT"_ns,
@@ -145,41 +155,41 @@ nsresult IntegrityPolicyWAICT::ParseHeader(const nsACString& aHeader) {
     return rv;
   }
 
-  auto destinationsResult = ParseDestinations(dict, /* aIsWAICT */ true);
+  auto destinationsResult =
+      IntegrityPolicy::ParseDestinations(dict, /* aIsWAICT */ true);
   if (destinationsResult.isErr()) {
     MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
-                "IntegrityPolicyWAICT::Initialize: ParseDestinations failed");
+                "ParseHeader: IntegrityPolicy::ParseDestinations failed");
 
-    nsTArray<nsString> params = {NS_ConvertUTF8toUTF16(aHeader)};
+    nsTArray<nsString> params = {NS_ConvertUTF8toUTF16(aHeader), u"destinations"_ns};
     ReportMessage(nsIScriptError::errorFlag, "WAICT"_ns,
-                  "WAICTHeaderBlockedDestinationsParseError", params);
+                  "WAICTHeaderFieldParseError", params);
 
     return destinationsResult.unwrapErr();
   }
-
   mDestinations = destinationsResult.unwrap();
+
+  auto endpointsResult = IntegrityPolicy::ParseEndpoints(dict);
+  if (endpointsResult.isErr()) {
+    MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
+                "ParseHeader: IntegrityPolicy::ParseEndpoints failed");
+
+    nsTArray<nsString> params = {NS_ConvertUTF8toUTF16(aHeader), u"endpoints"_ns};
+    ReportMessage(nsIScriptError::errorFlag, "WAICT"_ns,
+                  "WAICTHeaderFieldParseError", params);
+
+    return endpointsResult.unwrapErr();
+  }
+  mEndpoints = endpointsResult.unwrap();
 
   rv = waict::ParseMaxAge(dict, &mMaxAge);
   if (NS_FAILED(rv)) {
     MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
-                "IntegrityPolicyWAICT::Initialize: waict::ParseMaxAge failed");
+                "ParseHeader: waict::ParseMaxAge failed");
 
-    nsTArray<nsString> params = {NS_ConvertUTF8toUTF16(aHeader)};
+    nsTArray<nsString> params = {NS_ConvertUTF8toUTF16(aHeader), u"max-age"_ns};
     ReportMessage(nsIScriptError::errorFlag, "WAICT"_ns,
-                  "WAICTHeaderMaxAgeParseError", params);
-
-    return rv;
-  }
-
-  rv = waict::ParseManifest(dict, mManifestURL);
-  if (NS_FAILED(rv)) {
-    MOZ_LOG_FMT(
-        gWaictLog, LogLevel::Warning,
-        "IntegrityPolicyWAICT::Initialize: waict::ParseManifest failed");
-
-    nsTArray<nsString> params = {NS_ConvertUTF8toUTF16(aHeader)};
-    ReportMessage(nsIScriptError::errorFlag, "WAICT"_ns,
-                  "WAICTHeaderManifestParseError", params);
+                  "WAICTHeaderFieldParseError", params);
 
     return rv;
   }
@@ -187,11 +197,25 @@ nsresult IntegrityPolicyWAICT::ParseHeader(const nsACString& aHeader) {
   rv = waict::ParseMode(dict, &mEnforce);
   if (NS_FAILED(rv)) {
     MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
-                "IntegrityPolicyWAICT::Initialize: waict::ParseMode failed");
+                "ParseHeader: waict::ParseMode failed");
+
+    nsTArray<nsString> params = {NS_ConvertUTF8toUTF16(aHeader), u"mode"_ns};
+    ReportMessage(nsIScriptError::errorFlag, "WAICT"_ns,
+                  "WAICTHeaderFieldParseError", params);
+
+    return rv;
+  }
+
+  // Make sure this is the last step. We use the existence of the manifest URL
+  // as a trigger to activate WAICT.
+  rv = waict::ParseManifest(dict, mManifestURL);
+  if (NS_FAILED(rv)) {
+    MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
+                "ParseHeader: waict::ParseManifest failed");
 
     nsTArray<nsString> params = {NS_ConvertUTF8toUTF16(aHeader)};
     ReportMessage(nsIScriptError::errorFlag, "WAICT"_ns,
-                  "WAICTHeaderInvalidMode", params);
+                  "WAICTHeaderManifestParseError", params);
 
     return rv;
   }
@@ -332,7 +356,9 @@ NS_IMETHODIMP IntegrityPolicyWAICT::OnStreamComplete(nsIStreamLoader* aLoader,
     return NS_OK;
   }
 
-  MOZ_LOG_FMT(gWaictLog, LogLevel::Debug, "Manifest validation successfull, version = {}", manifest.mVersion);
+  MOZ_LOG_FMT(gWaictLog, LogLevel::Debug,
+              "Manifest validation successfull, version = {}",
+              manifest.mVersion);
 
   if (mDocument && mDocument->GetDocumentURI()) {
     if (WindowGlobalChild* wgc = mDocument->GetWindowGlobalChild()) {
@@ -344,7 +370,8 @@ NS_IMETHODIMP IntegrityPolicyWAICT::OnStreamComplete(nsIStreamLoader* aLoader,
   if (manifest.mHashes.WasPassed()) {
     MOZ_ASSERT(mHashes.IsEmpty());
     for (const auto& entry : manifest.mHashes.Value().Entries()) {
-      mHashes.InsertOrUpdate(NS_ConvertUTF16toUTF8(entry.mKey), NS_ConvertUTF16toUTF8(entry.mValue));
+      mHashes.InsertOrUpdate(NS_ConvertUTF16toUTF8(entry.mKey),
+                             NS_ConvertUTF16toUTF8(entry.mValue));
     }
   }
 
@@ -433,6 +460,54 @@ void IntegrityPolicyWAICT::ReportMessage(uint32_t aErrorFlags,
     nsContentUtils::ReportToConsole(aErrorFlags, aCategory, mDocument,
                                     nsContentUtils::eSECURITY_PROPERTIES,
                                     aMessageName, aParams);
+  }
+}
+
+void IntegrityPolicyWAICT::ReportViolation(
+    nsIURI* aURI, IntegrityPolicy::DestinationType aDestination) const {
+  if (!mDocument) {
+    return;
+  }
+
+  nsPIDOMWindowInner* window = mDocument->GetInnerWindow();
+  if (NS_WARN_IF(!window)) {
+    return;
+  }
+  nsCOMPtr<nsIGlobalObject> global = window->AsGlobal();
+
+  nsCOMPtr<nsIURI> uri = mDocument->GetDocumentURI();
+  if (NS_WARN_IF(!uri)) {
+    return;
+  }
+
+  nsAutoCString documentURL;
+  ReportingUtils::StripURL(uri, documentURL);
+  NS_ConvertUTF8toUTF16 documentURLUTF16(documentURL);
+
+  nsAutoCString blockedURL;
+  ReportingUtils::StripURL(aURI, blockedURL);
+
+  nsAutoCString destination;
+  switch (aDestination) {
+    case IntegrityPolicy::DestinationType::Script:
+      destination = "script"_ns;
+      break;
+    case IntegrityPolicy::DestinationType::Style:
+      destination = "style"_ns;
+      break;
+    case IntegrityPolicy::DestinationType::Image:
+      destination = "image"_ns;
+      break;
+  }
+
+  for (const nsCString& endpoint : mEndpoints) {
+    RefPtr<IntegrityViolationReportBody> body =
+        new IntegrityViolationReportBody(global, documentURL, blockedURL,
+                                         destination, !mEnforce);
+
+    ReportingUtils::Report(global, nsGkAtoms::integrity_violation,
+                           NS_ConvertUTF8toUTF16(endpoint), documentURLUTF16,
+                           body);
   }
 }
 

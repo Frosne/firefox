@@ -143,9 +143,8 @@ Result<IntegrityPolicy::Sources, nsresult> ParseSources(
   return result;
 }
 
-/* static */
-Result<IntegrityPolicy::Destinations, nsresult> ParseDestinations(
-    nsISFVDictionary* aDict, bool aIsWAICT) {
+Result<IntegrityPolicy::Destinations, nsresult>
+IntegrityPolicy::ParseDestinations(nsISFVDictionary* aDict, bool aIsWAICT) {
   // blocked destinations, a list of destinations, initially empty.
 
   nsCOMPtr<nsISFVItemOrInnerList> iil;
@@ -182,8 +181,8 @@ Result<IntegrityPolicy::Destinations, nsresult> ParseDestinations(
   return result;
 }
 
-/* static */
-Result<nsTArray<nsCString>, nsresult> ParseEndpoints(nsISFVDictionary* aDict) {
+Result<nsTArray<nsCString>, nsresult> IntegrityPolicy::ParseEndpoints(
+    nsISFVDictionary* aDict) {
   // endpoints, a list of strings, initially empty.
   nsCOMPtr<nsISFVItemOrInnerList> iil;
   nsresult rv = aDict->Get("endpoints"_ns, getter_AddRefs(iil));

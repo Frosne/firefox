@@ -89,6 +89,8 @@ pub enum QuadRenderStrategy {
 pub fn prepare_quad(
     pattern_builder: &dyn PatternBuilder,
     local_rect: &LayoutRect,
+    aligned_aa_edges: EdgeMask,
+    transfomed_aa_edges: EdgeMask,
     prim_instance_index: PrimitiveInstanceIndex,
     cache_key: &Option<QuadCacheKey>,
     prim_spatial_node_index: SpatialNodeIndex,
@@ -153,6 +155,8 @@ pub fn prepare_quad(
         pattern_builder,
         shared_pattern.as_ref(),
         local_rect,
+        aligned_aa_edges,
+        transfomed_aa_edges,
         prim_instance_index,
         cache_key,
         prim_spatial_node_index,
@@ -175,6 +179,8 @@ pub fn prepare_repeatable_quad(
     local_rect: &LayoutRect,
     stretch_size: LayoutSize,
     tile_spacing: LayoutSize,
+    aligned_aa_edges: EdgeMask,
+    transfomed_aa_edges: EdgeMask,
     prim_instance_index: PrimitiveInstanceIndex,
     cache_key: &Option<QuadCacheKey>,
     prim_spatial_node_index: SpatialNodeIndex,
@@ -246,6 +252,8 @@ pub fn prepare_repeatable_quad(
             pattern_builder,
             shared_pattern.as_ref(),
             local_rect,
+            aligned_aa_edges,
+            transfomed_aa_edges,
             prim_instance_index,
             &cache_key,
             prim_spatial_node_index,
@@ -284,6 +292,8 @@ pub fn prepare_repeatable_quad(
             pattern_builder,
             shared_pattern.as_ref(),
             &tile_rect,
+            aligned_aa_edges & tile.edge_flags,
+            transfomed_aa_edges & tile.edge_flags,
             prim_instance_index,
             &cache_key,
             prim_spatial_node_index,
@@ -305,6 +315,8 @@ fn prepare_quad_impl(
     pattern_builder: &dyn PatternBuilder,
     shared_pattern: Option<&Pattern>,
     local_rect: &LayoutRect,
+    aligned_aa_edges: EdgeMask,
+    transfomed_aa_edges: EdgeMask,
     prim_instance_index: PrimitiveInstanceIndex,
     cache_key: &Option<QuadCacheKey>,
     prim_spatial_node_index: SpatialNodeIndex,
@@ -364,15 +376,17 @@ fn prepare_quad_impl(
         quad_flags |= QuadFlags::APPLY_RENDER_TASK_CLIP;
     }
 
-    // TODO(gw): For now, we don't select per-edge AA at all if the primitive
-    //           has a 2d transform, which matches existing behavior. However,
-    //           as a follow up, we can now easily check if we have a 2d-aligned
-    //           primitive on a subpixel boundary, and enable AA along those edge(s).
     let aa_flags = if prim_is_2d_axis_aligned {
-        EdgeMask::empty()
+        aligned_aa_edges
     } else {
-        EdgeMask::all()
+        transfomed_aa_edges
     };
+
+    // We round the coordinates of non-antialiased edges of the primitive.
+    // This allows us to ensure that indirect axis-aligned primitives cover the render
+    // task exactly. Since we do this for indirect primitives, we have to also do it for
+    // other rendering strategies to avoid cracks between side-by-side primitives.
+    let round_edges = !aa_flags;
 
     if let QuadRenderStrategy::Direct = strategy {
         let pattern = shared_pattern.cloned().unwrap_or_else(|| {
@@ -387,14 +401,16 @@ fn prepare_quad_impl(
             quad_flags |= QuadFlags::IS_OPAQUE;
         }
 
-        let main_prim_address = write_prim_blocks(
-            &mut state.frame_gpu_data.f32,
+        let quad = create_quad_primitive(
             &local_rect,
             &clip_chain.local_clip_rect,
             &DeviceRect::max_rect(),
             local_to_device_scale_offset.as_ref(),
+            round_edges,
             &pattern,
         );
+
+        let main_prim_address = state.frame_gpu_data.f32.push(&quad);
 
         // Render the primitive as a single instance. Coordinates are provided to the
         // shader in layout space.
@@ -439,11 +455,12 @@ fn prepare_quad_impl(
     // scale. I think that it is the case, but it's not super clean.
     let device_scale: Scale<f32, RasterPixel, DevicePixel> = Scale::new(surface.device_pixel_scale.0);
 
-    let clipped_surface_rect = (clipped_raster_rect * device_scale).round();
+    // Rounding is important here because clipped_surface_rect.min may be used as the origin
+    // of render tasks. Fractional values would introduce fractional offsets in the render tasks.
+    let mut clipped_surface_rect = (clipped_raster_rect * device_scale).round();
     if clipped_surface_rect.is_empty() {
         return;
     }
-    let surface_size = clipped_surface_rect.size().to_i32();
 
     match strategy {
         QuadRenderStrategy::Direct => {}
@@ -456,18 +473,32 @@ fn prepare_quad_impl(
                 )
             });
 
-            let main_prim_address = write_prim_blocks(
-                &mut state.frame_gpu_data.f32,
+            let quad = create_quad_primitive(
                 &local_rect,
                 &clip_chain.local_clip_rect,
                 &clipped_surface_rect,
                 local_to_device_scale_offset.as_ref(),
+                round_edges,
                 &pattern,
             );
 
+            let main_prim_address = state.frame_gpu_data.f32.push(&quad);
+
+            if prim_is_2d_scale_translation && aa_flags.is_empty() {
+                // If the primitive has a simple transform, then quad.clip is in device space
+                // and is a strict subset of clipped_surface_rect. If there is no anti-aliasing,
+                // and the pattern is opaque, we want to ensure that the primitive covers the
+                // entire render task so that we can safely skip clearing it.
+                // In this situation, create_quad_primitive has rounded the edges of quad.clip
+                // so we are not introducing a fractional offset in clipped_surface_rect.
+                clipped_surface_rect = quad.clip.cast_unit();
+            }
+
+            let task_size = clipped_surface_rect.size().to_i32();
+
             let cache_key = cache_key.as_ref().map(|key| {
                 RenderTaskCacheKey {
-                    size: surface_size,
+                    size: task_size,
                     kind: RenderTaskCacheKeyKind::Quad(key.clone()),
                 }
             });
@@ -484,7 +515,7 @@ fn prepare_quad_impl(
             let task_id = add_render_task_with_mask(
                 &pattern,
                 &local_rect.intersection_unchecked(&clip_chain.local_clip_rect),
-                surface_size,
+                task_size,
                 clipped_surface_rect.min,
                 clip_chain.clips_range,
                 prim_spatial_node_index,
@@ -576,7 +607,7 @@ fn prepare_nine_patch(
     prim_instance_index: PrimitiveInstanceIndex,
     local_rect: &LayoutRect,
     local_clip_rect: &LayoutRect,
-    device_clip_rect: &DeviceRect,
+    clipped_surface_rect: &DeviceRect,
     ninepatch_rect: &LayoutRect,
     radius: LayoutVector2D,
     pattern: &Pattern,
@@ -601,10 +632,18 @@ fn prepare_nine_patch(
     //  - in layout space for the render task,
     //  - in device space for the instances that draw into the destination picture.
 
-    let int_device_clip_rect = device_clip_rect.round_out().to_i32();
+    let mut device_prim_rect: DeviceRect = local_to_device.map_rect(&local_rect);
+    let mut device_clip_rect: DeviceRect = local_to_device
+        .map_rect(&local_clip_rect)
+        .intersection_unchecked(clipped_surface_rect);
 
-    let device_prim_rect: DeviceRect = local_to_device.map_rect(&local_rect);
-    let device_clip_rect: DeviceRect = local_to_device.map_rect(&local_clip_rect);
+    let rounded_edges = !aa_flags;
+    device_prim_rect = rounded_edges.select(device_prim_rect.round(), device_prim_rect);
+    device_clip_rect = rounded_edges.select(device_clip_rect.round(), device_clip_rect);
+    let clipped_surface_rect = rounded_edges
+        .select(device_clip_rect, *clipped_surface_rect)
+        .to_i32();
+
 
     let local_corner_0 = LayoutRect::new(
         ninepatch_rect.min,
@@ -687,7 +726,7 @@ fn prepare_nine_patch(
             }
 
             let segment = DeviceIntRect::new(point2(x0, y0), point2(x1, y1));
-            let segment_device_rect = match segment.intersection(&int_device_clip_rect) {
+            let segment_device_rect = match segment.intersection(&clipped_surface_rect) {
                 Some(rect) => rect,
                 None => {
                     continue;
@@ -916,6 +955,7 @@ fn prepare_tiles(
             &clip_chain.local_clip_rect,
             device_clip_rect,
             local_to_device_scale_offset.as_ref(),
+            !aa_flags,
             pattern,
         )
     });
@@ -973,6 +1013,7 @@ fn prepare_tiles(
                     &clip_chain.local_clip_rect,
                     device_clip_rect,
                     local_to_device_scale_offset.as_ref(),
+                    EdgeMask::all(),
                     &pattern,
                 )
             });
@@ -1538,7 +1579,7 @@ pub fn prepare_clip_task(
             pattern_transform,
         );
 
-        (ClipSpace::Raster, clip_transform_id, quad_address, quad_transform_id, true)
+        (ClipSpace::Device, clip_transform_id, quad_address, quad_transform_id, true)
     } else {
         let prim_spatial_node = spatial_tree.get_spatial_node(prim_spatial_node_index);
 
@@ -1549,10 +1590,15 @@ pub fn prepare_clip_task(
             spatial_tree,
         );
 
+        // Conservatively inflate the clip's primitive to ensure that it covers potential
+        // anti-aliasing pixels of the original primitive. 2.0 matches AA_PIXEL_RADIUS in
+        // quad.glsl.
+        let rect = prim_local_coverage_rect.inflate(2.0, 2.0);
+
         let quad_address = write_layout_prim_blocks(
             gpu_buffer,
-            prim_local_coverage_rect,
-            prim_local_coverage_rect,
+            &rect,
+            &rect,
             ColorF::WHITE,
             RenderTaskId::INVALID,
             &[],
@@ -1605,6 +1651,42 @@ pub fn prepare_clip_task(
     );
 }
 
+fn create_quad_primitive(
+    local_rect: &LayoutRect,
+    local_clip_rect: &LayoutRect,
+    device_clip_rect: &DeviceRect,
+    local_to_device: Option<&ScaleOffset>,
+    round_edges: EdgeMask,
+    pattern: &Pattern,
+) -> QuadPrimitive {
+    let mut prim_rect;
+    let mut prim_clip_rect;
+    let pattern_transform;
+    if let Some(local_to_device) = local_to_device {
+        prim_rect = local_to_device.map_rect(local_rect);
+        prim_clip_rect = local_to_device
+                .map_rect(&local_clip_rect)
+                .intersection_unchecked(device_clip_rect)
+                .to_untyped();
+        prim_rect = round_edges.select(prim_rect.round(), prim_rect);
+        prim_clip_rect = round_edges.select(prim_clip_rect.round(), prim_clip_rect);
+
+        pattern_transform = local_to_device.inverse();
+    } else {
+        prim_rect = local_rect.to_untyped();
+        prim_clip_rect = local_clip_rect.to_untyped();
+        pattern_transform = ScaleOffset::identity();
+    };
+
+    QuadPrimitive {
+        bounds: prim_rect,
+        clip: prim_clip_rect,
+        input_task: pattern.texture_input.task_id,
+        pattern_scale_offset: pattern_transform,
+        color: pattern.base_color.premultiplied(),
+    }
+}
+
 /// Write the GPU blocks, either in local or device space
 ///
 /// If a local-to-device transform is provided, then the
@@ -1616,17 +1698,20 @@ fn write_prim_blocks(
     local_clip_rect: &LayoutRect,
     device_clip_rect: &DeviceRect,
     local_to_device: Option<&ScaleOffset>,
+    round_edges: EdgeMask,
     pattern: &Pattern,
 ) -> GpuBufferAddress {
-    let prim_rect;
-    let prim_clip_rect;
+    let mut prim_rect;
+    let mut prim_clip_rect;
     let pattern_transform;
     if let Some(local_to_device) = local_to_device {
         prim_rect = local_to_device.map_rect(&local_rect);
         prim_clip_rect = local_to_device
-            .map_rect(&local_clip_rect)
-            .intersection_unchecked(&device_clip_rect)
-            .to_untyped();
+                .map_rect(&local_clip_rect)
+                .intersection_unchecked(&device_clip_rect)
+                .to_untyped();
+        prim_rect = round_edges.select(prim_rect.round(), prim_rect);
+        prim_clip_rect = round_edges.select(prim_rect.round(), prim_clip_rect);
         pattern_transform = local_to_device.inverse();
     } else {
         prim_rect = local_rect.to_untyped();
@@ -1807,14 +1892,14 @@ pub fn add_to_batch<F>(
             };
             f(aa_batch_key, instance.into());
         }
-        if edge_flags.contains(EdgeMask::RIGHT) {
+        if edge_flags.contains(EdgeMask::TOP) {
             let instance = QuadInstance {
                 part_index: PartIndex::Top as u8,
                 ..instance
             };
             f(aa_batch_key, instance.into());
         }
-        if edge_flags.contains(EdgeMask::TOP) {
+        if edge_flags.contains(EdgeMask::RIGHT) {
             let instance = QuadInstance {
                 part_index: PartIndex::Right as u8,
                 ..instance

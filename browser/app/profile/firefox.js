@@ -2067,7 +2067,7 @@ pref("browser.newtabpage.activity-stream.discoverystream.merino-provider.endpoin
 pref("browser.newtabpage.activity-stream.discoverystream.merino-provider.ohttp.enabled", false);
 pref("browser.newtabpage.activity-stream.discoverystream.ohttp.relayURL", "https://mozilla-ohttp.fastly-edge.com/");
 pref("browser.newtabpage.activity-stream.discoverystream.ohttp.configURL", "https://prod.ohttp-gateway.prod.webservices.mozgcp.net/ohttp-configs");
-pref("browser.newtabpage.activity-stream.discoverystream.imageProxy.enabled", false);
+pref("browser.newtabpage.activity-stream.discoverystream.imageProxy.enabled", true);
 
 // List of regions that get spocs by default.
 pref("browser.newtabpage.activity-stream.discoverystream.region-spocs-config", "US,CA,DE,GB,FR,IT,ES");
@@ -2277,7 +2277,6 @@ pref("browser.smartwindow.firstrun.autoAdvanceMS", 3000);
 pref("browser.smartwindow.firstrun.hasCompleted", false);
 pref("browser.smartwindow.firstrun.modelChoice", "");
 pref("browser.smartwindow.model", "");
-pref("browser.smartwindow.preferences.enabled", false);
 pref("browser.smartwindow.preferences.endpoint", "");
 
 // Block insecure active content on https pages
@@ -2937,6 +2936,13 @@ pref("browser.toolbars.bookmarks.visibility", "newtab");
 // bookmarks toolbar contextmenu.
 pref("browser.toolbars.bookmarks.showOtherBookmarks", true);
 
+// Toggles the availability of the share tab button.
+// If preffed off, it makes it so that the button is no longer
+// available on the toolbar or in the customize section. Requires a 
+// restart to reflect state changes.
+#ifndef XP_LINUX
+  pref("browser.toolbars.share-button.enabled", true);
+#endif
 
 // Felt Privacy pref to control simplified private browsing UI
 pref("browser.privatebrowsing.felt-privacy-v1", false);
@@ -3432,9 +3438,6 @@ pref("cookiebanners.ui.desktop.enabled", false);
 // When true, shows a one-time feature callout for cookie banner blocking.
 pref("cookiebanners.ui.desktop.showCallout", false);
 
-// Controls which variant of the cookie banner CFR the user is presented with.
-pref("cookiebanners.ui.desktop.cfrVariant", 0);
-
 // Parameters for the swipe-to-navigation icon.
 //
 // `navigation-icon-{start|end}-position` is the start or the end position of
@@ -3579,7 +3582,7 @@ pref("browser.ipProtection.features.autoStart", false);
 // Prefs to track the user turning on autostart preference
 pref("browser.ipProtection.autoStartEnabled", false);
 pref("browser.ipProtection.autoStartPrivateEnabled", false);
-pref("browser.ipProtection.autoRestoreEnabled", true);
+pref("browser.ipProtection.autoRestoreEnabled", false);
 // Pref to track whether the user has turned IP protection on
 pref("browser.ipProtection.userEnabled", false);
 // Pref to track the number of times the user has enabled IP protection (max 3)

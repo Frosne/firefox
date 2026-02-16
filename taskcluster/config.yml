@@ -347,6 +347,7 @@ treeherder:
         'ui-colors': 'ui-colors'
         'ui-fonts': 'ui-fonts'
         'ui-icons': 'ui-icons'
+        'ui-richtext': 'ui-richtext'
         'ui-tabcounter': 'ui-tabcounter'
         'ui-widgets': 'ui-widgets'
 
@@ -541,7 +542,7 @@ taskgraph:
 
 workers:
     aliases:
-        b-linux(|-docker(|-x?large)-amd|-amd|-medium|-aarch64|-xlarge|-kvm):
+        b-linux(|-docker(|-x?large)-amd|-medium|-aarch64|-xlarge|-kvm):
             provisioner: '{trust-domain}-{level}'
             implementation: docker-worker
             os: linux

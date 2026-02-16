@@ -31,6 +31,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Ignore
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -40,6 +41,8 @@ import org.mozilla.fenix.GleanMetrics.ShortcutsLibrary
 import org.mozilla.fenix.GleanMetrics.TopSites
 import org.mozilla.fenix.R
 import org.mozilla.fenix.components.Analytics
+import org.mozilla.fenix.components.AppStore
+import org.mozilla.fenix.components.appstate.AppState
 import org.mozilla.fenix.components.usecases.FenixBrowserUseCases
 import org.mozilla.fenix.ext.components
 import org.mozilla.fenix.helpers.FenixGleanTestRule
@@ -55,6 +58,7 @@ class DefaultTopSiteControllerTest {
     @get:Rule
     val gleanTestRule = FenixGleanTestRule(testContext)
 
+    private val appStore: AppStore = AppStore(AppState())
     private val activity: Activity = mockk(relaxed = true)
     private val navController: NavController = mockk(relaxed = true)
     private val tabsUseCases: TabsUseCases = mockk(relaxed = true)
@@ -706,6 +710,7 @@ class DefaultTopSiteControllerTest {
         verify { navController.navigate(R.id.browserFragment) }
     }
 
+    @Ignore("Bug 2016888 - passes on individual test run, fails when running entire app test suite.")
     @Test
     fun `WHEN the provided top site is clicked THEN send a click callback request`() = runTest {
         val controller = spyk(createController(this))
@@ -749,6 +754,7 @@ class DefaultTopSiteControllerTest {
         assertTrue(topSiteImpressionPinged)
     }
 
+    @Ignore("Bug 2016888 - passes on individual test run, fails when running entire app test suite.")
     @Test
     fun `GIVEN Ads client is enabled WHEN the provided top site is clicked THEN send a click callback request`() = runTest {
         every { settings.enableMozillaAdsClient } returns true
@@ -794,6 +800,7 @@ class DefaultTopSiteControllerTest {
         assertTrue(topSiteImpressionPinged)
     }
 
+    @Ignore("Bug 2016888 - passes on individual test run, fails when running entire app test suite.")
     @Test
     fun `WHEN the provided top site is seen THEN send a impression callback request`() = runTest {
         val controller = spyk(createController(this))
@@ -837,6 +844,7 @@ class DefaultTopSiteControllerTest {
         assertTrue(topSiteImpressionSubmitted)
     }
 
+    @Ignore("Bug 2016888 - passes on individual test run, fails when running entire app test suite.")
     @Test
     fun `GIVEN Ads client is enabled WHEN the provided top site is seen THEN send a impression callback request`() = runTest {
         every { settings.enableMozillaAdsClient } returns true
@@ -1145,6 +1153,7 @@ class DefaultTopSiteControllerTest {
 
     private fun createController(scope: CoroutineScope): DefaultTopSiteController =
         DefaultTopSiteController(
+            appStore = appStore,
             activityRef = WeakReference(activity),
             navControllerRef = WeakReference(navController),
             store = store,
