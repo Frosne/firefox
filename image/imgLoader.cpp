@@ -36,6 +36,8 @@
 #include "mozilla/dom/ContentParent.h"
 #include "mozilla/dom/FetchPriority.h"
 #include "mozilla/dom/nsMixedContentBlocker.h"
+#include "mozilla/dom/PolicyContainer.h"
+#include "mozilla/dom/IntegrityPolicyWAICT.h"
 #include "mozilla/image/ImageMemoryReporter.h"
 #include "mozilla/layers/CompositorManagerChild.h"
 #include "nsCOMPtr.h"
@@ -75,6 +77,8 @@
 #include "nsIHttpChannelInternal.h"
 #include "nsILoadGroupChild.h"
 #include "nsIDocShell.h"
+
+#include "mozilla/dom/WAICTLog.h"
 
 using namespace mozilla;
 using namespace mozilla::dom;
@@ -3028,6 +3032,77 @@ NS_IMETHODIMP
 ProxyListener::OnStopRequest(nsIRequest* aRequest, nsresult status) {
   if (!mDestListener) {
     return NS_ERROR_FAILURE;
+  }
+
+  if (nsCOMPtr<nsIChannel> channel = do_QueryInterface(aRequest)) {
+    nsCOMPtr<nsILoadInfo> loadInfo = channel->LoadInfo();
+    nsCOMPtr<nsISupports> loadingContext = loadInfo->GetLoadingContext();
+
+    // Open for better ideas
+    imgRequest* imgReq = static_cast<imgRequest*>(mDestListener.get());
+    if (!imgReq) {
+      MOZ_LOG(gWaictLog, LogLevel::Error,
+              ("[this=%p] ProxyListener::OnStopRequest -- "
+               "Destination listener is not an imgRequest\n",
+               this));
+      return mDestListener->OnStopRequest(aRequest, status);
+    }
+
+    RefPtr<mozilla::dom::ResourceHasher> hasher = imgReq->GetResourceHasher();
+    if (!hasher) {
+      // No hasher means we don't need to enforce WAICT.
+      return mDestListener->OnStopRequest(aRequest, status);
+    }
+
+    hasher->Finish();
+    const nsACString& computedHash = hasher->GetHash();
+    if (computedHash.IsEmpty()) {
+      MOZ_LOG(gWaictLog, LogLevel::Error,
+              ("[this=%p] ProxyListener::OnStopRequest -- "
+               "No computed hash available\n",
+               this));
+      return mDestListener->OnStopRequest(aRequest, NS_ERROR_FAILURE);
+    }
+
+    RefPtr<Document> doc;
+    if (nsCOMPtr<nsINode> node = do_QueryInterface(loadingContext)) {
+      doc = node->OwnerDoc();
+    }
+
+    if (doc) {
+      if (auto* policy = PolicyContainer::GetIntegrityPolicyWAICT(
+              doc->GetPolicyContainer())) {
+        MOZ_ASSERT(
+            policy->ShouldHandle(IntegrityPolicy::DestinationType::Image));
+
+        policy->WaitForManifestLoad()->Then(
+            GetCurrentSerialEventTarget(), __func__,
+            [listener = nsCOMPtr{mDestListener}, channel,
+             request = nsCOMPtr{aRequest}, status, policy = RefPtr{policy},
+             computedHash = nsCString(computedHash), doc = RefPtr{doc}](bool) {
+              // XXX Not clear if we want to use pre-redirect URL.
+              nsCOMPtr<nsIURI> originalURI;
+              channel->GetOriginalURI(getter_AddRefs(originalURI));
+              if (!policy->MaybeCheckResourceIntegrity(
+                      originalURI, IntegrityPolicy::DestinationType::Image,
+                      computedHash, doc)) {
+                return listener->OnStopRequest(request, NS_ERROR_FAILURE);
+              }
+
+              return listener->OnStopRequest(request, status);
+            },
+            [](bool) {
+              MOZ_ASSERT_UNREACHABLE("should always resolve");
+              // Exceptional error (timeout, page closed, etc.) - always fail
+              // MOZ_LOG(gWaictLog, LogLevel::Error,
+              //         ("ProxyListener::OnStopRequest -- Promise
+              //         rejected\n"));
+              // return listener->OnStopRequest(request, NS_ERROR_FAILURE);
+            });
+
+        return NS_OK;
+      }
+    }
   }
 
   return mDestListener->OnStopRequest(aRequest, status);

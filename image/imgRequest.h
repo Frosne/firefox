@@ -8,6 +8,7 @@
 #define mozilla_image_imgRequest_h
 
 #include "nsIChannelEventSink.h"
+#include "nsICryptoHash.h"
 #include "nsIInterfaceRequestor.h"
 #include "nsIStreamListener.h"
 #include "nsIThreadRetargetableStreamListener.h"
@@ -20,6 +21,8 @@
 #include "nsIAsyncVerifyRedirectCallback.h"
 #include "mozilla/Mutex.h"
 #include "ImageCacheKey.h"
+
+#include "mozilla/dom/ResourceHasher.h"
 
 class imgCacheValidator;
 class imgLoader;
@@ -208,6 +211,10 @@ class imgRequest final : public nsIThreadRetargetableStreamListener,
     return mShouldReportRenderTimeForLCP;
   }
 
+  mozilla::dom::ResourceHasher* GetResourceHasher() const {
+    return mResourceHasher;
+  }
+
  private:
   friend class FinishPreparingForNewPartRunnable;
 
@@ -303,6 +310,9 @@ class imgRequest final : public nsIThreadRetargetableStreamListener,
   bool mHadInsecureRedirect : 1 MOZ_GUARDED_BY(mMutex);
   // The ID of the inner window origin, used for error reporting.
   uint64_t mInnerWindowId MOZ_GUARDED_BY(mMutex);
+
+  // Hasher for resource integrity verification.
+  RefPtr<mozilla::dom::ResourceHasher> mResourceHasher;
 };
 
 #endif  // mozilla_image_imgRequest_h
