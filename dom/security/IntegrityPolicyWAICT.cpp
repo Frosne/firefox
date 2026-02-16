@@ -199,9 +199,9 @@ nsresult IntegrityPolicyWAICT::ParseHeader(const nsACString& aHeader) {
     MOZ_LOG_FMT(gWaictLog, LogLevel::Warning,
                 "ParseHeader: waict::ParseMode failed");
 
-    nsTArray<nsString> params = {NS_ConvertUTF8toUTF16(aHeader)};
+    nsTArray<nsString> params = {NS_ConvertUTF8toUTF16(aHeader), u"mode"_ns};
     ReportMessage(nsIScriptError::errorFlag, "WAICT"_ns,
-                  "WAICTHeaderModeParseError", params);
+                  "WAICTHeaderFieldParseError", params);
 
     return rv;
   }
