@@ -47,6 +47,9 @@ bool IntegrityPolicyWAICT::MaybeCheckResourceIntegrity(
 
   // If manifest failed to load/validate, decision depends on mode
   if (!mManifestValid) {
+    ReportViolation(aURI, aDestination,
+                    IntegrityViolationReason::Invalid_manifest);
+
     if (mEnforce) {
       MOZ_LOG_FMT(
           gWaictLog, LogLevel::Warning,
@@ -79,6 +82,8 @@ bool IntegrityPolicyWAICT::MaybeCheckResourceIntegrity(
                                        NS_ConvertUTF8toUTF16(aHash)};
           ReportMessage(nsIScriptError::errorFlag, "WAICT"_ns,
                         "WAICTHashMismatch", params);
+          ReportViolation(aURI, aDestination,
+                          IntegrityViolationReason::No_manifest_match);
           return false;
         }
 
@@ -110,6 +115,8 @@ bool IntegrityPolicyWAICT::MaybeCheckResourceIntegrity(
                                NS_ConvertUTF8toUTF16(aHash)};
   ReportMessage(nsIScriptError::errorFlag, "WAICT"_ns,
                 "WAICTResourceNotInManifest", params);
+  ReportViolation(aURI, aDestination,
+                  IntegrityViolationReason::Missing_from_manifest);
   return false;
 }
 
@@ -458,6 +465,55 @@ void IntegrityPolicyWAICT::ReportMessage(uint32_t aErrorFlags,
   }
 }
 
+void IntegrityPolicyWAICT::ReportViolation(
+    nsIURI* aURI, IntegrityPolicy::DestinationType aDestination,
+    IntegrityViolationReason aReason) const {
+  if (!mDocument) {
+    return;
+  }
+
+  nsPIDOMWindowInner* window = mDocument->GetInnerWindow();
+  if (NS_WARN_IF(!window)) {
+    return;
+  }
+  nsCOMPtr<nsIGlobalObject> global = window->AsGlobal();
+
+  nsCOMPtr<nsIURI> uri = mDocument->GetDocumentURI();
+  if (NS_WARN_IF(!uri)) {
+    return;
+  }
+
+  nsAutoCString documentURL;
+  ReportingUtils::StripURL(uri, documentURL);
+  NS_ConvertUTF8toUTF16 documentURLUTF16(documentURL);
+
+  nsAutoCString blockedURL;
+  ReportingUtils::StripURL(aURI, blockedURL);
+
+  nsAutoCString destination;
+  switch (aDestination) {
+    case IntegrityPolicy::DestinationType::Script:
+      destination = "script"_ns;
+      break;
+    case IntegrityPolicy::DestinationType::Style:
+      destination = "style"_ns;
+      break;
+    case IntegrityPolicy::DestinationType::Image:
+      destination = "image"_ns;
+      break;
+  }
+
+  for (const nsCString& endpoint : mEndpoints) {
+    RefPtr<IntegrityViolationReportBody> body =
+        new IntegrityViolationReportBody(global, documentURL, blockedURL,
+                                         destination, !mEnforce,
+                                         Nullable(aReason));
+
+    ReportingUtils::Report(global, nsGkAtoms::integrity_violation,
+                           NS_ConvertUTF8toUTF16(endpoint), documentURLUTF16,
+                           body);
+  }
+}
 
 bool IntegrityPolicyWAICT::Equals(const IntegrityPolicyWAICT* aWaict,
                                   const IntegrityPolicyWAICT* aOtherWaict) {
