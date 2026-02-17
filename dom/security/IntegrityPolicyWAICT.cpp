@@ -9,6 +9,7 @@
 #include "WAICTLog.h"
 #include "WAICTUtils.h"
 #include "mozilla/Logging.h"
+#include "mozilla/StaticPrefs_security.h"
 #include "mozilla/dom/Document.h"
 #include "mozilla/dom/IntegrityViolationReportBody.h"
 #include "mozilla/dom/ReportingUtils.h"
@@ -46,12 +47,14 @@ bool IntegrityPolicyWAICT::MaybeCheckResourceIntegrity(
 
   // If manifest failed to load/validate, decision depends on mode
   if (!mManifestValid) {
+    ReportViolation(aURI, aDestination,
+                    IntegrityViolationReason::Invalid_manifest);
+
     if (mEnforce) {
       MOZ_LOG_FMT(
           gWaictLog, LogLevel::Warning,
           "IntegrityPolicyWAICT::MaybeCheckResourceIntegrity: Manifest not "
           "valid, enforce mode - blocking");
-      ReportViolation(aURI, aDestination);
       return false;
     }
     MOZ_LOG_FMT(
@@ -79,7 +82,8 @@ bool IntegrityPolicyWAICT::MaybeCheckResourceIntegrity(
                                        NS_ConvertUTF8toUTF16(aHash)};
           ReportMessage(nsIScriptError::errorFlag, "WAICT"_ns,
                         "WAICTHashMismatch", params);
-          ReportViolation(aURI, aDestination);
+          ReportViolation(aURI, aDestination,
+                          IntegrityViolationReason::No_manifest_match);
           return false;
         }
 
@@ -111,7 +115,8 @@ bool IntegrityPolicyWAICT::MaybeCheckResourceIntegrity(
                                NS_ConvertUTF8toUTF16(aHash)};
   ReportMessage(nsIScriptError::errorFlag, "WAICT"_ns,
                 "WAICTResourceNotInManifest", params);
-  ReportViolation(aURI, aDestination);
+  ReportViolation(aURI, aDestination,
+                  IntegrityViolationReason::Missing_from_manifest);
   return false;
 }
 
@@ -120,6 +125,10 @@ nsresult IntegrityPolicyWAICT::Create(Document* aDocument,
                                       const nsACString& aHeader,
                                       IntegrityPolicyWAICT** aPolicy) {
   NS_ENSURE_ARG_POINTER(aDocument);
+
+  if (!StaticPrefs::security_waict_enabled()) {
+    return NS_OK;
+  }
 
   if (aHeader.IsEmpty()) {
     return NS_OK;
@@ -282,14 +291,6 @@ IntegrityPolicyWAICT::ValidateManifest(const nsACString& aManifestJSON,
     return ManifestValidationStatus::InvalidJSON;
   }
 
-  if (aOutManifest.mVersion != 1) {
-    if (aPolicy) {
-      aPolicy->ReportMessage(nsIScriptError::errorFlag, "WAICT"_ns,
-                             "WAICTManifestWrongVersion", {});
-    }
-    return ManifestValidationStatus::InvalidVersion;
-  }
-
   bool hasHashes = aOutManifest.mHashes.WasPassed() &&
                    !aOutManifest.mHashes.Value().Entries().IsEmpty();
   bool hasAnyHashes = aOutManifest.mAny_hashes.WasPassed() &&
@@ -357,8 +358,7 @@ NS_IMETHODIMP IntegrityPolicyWAICT::OnStreamComplete(nsIStreamLoader* aLoader,
   }
 
   MOZ_LOG_FMT(gWaictLog, LogLevel::Debug,
-              "Manifest validation successfull, version = {}",
-              manifest.mVersion);
+              "Manifest validation successful");
 
   if (mDocument && mDocument->GetDocumentURI()) {
     if (WindowGlobalChild* wgc = mDocument->GetWindowGlobalChild()) {
@@ -464,7 +464,8 @@ void IntegrityPolicyWAICT::ReportMessage(uint32_t aErrorFlags,
 }
 
 void IntegrityPolicyWAICT::ReportViolation(
-    nsIURI* aURI, IntegrityPolicy::DestinationType aDestination) const {
+    nsIURI* aURI, IntegrityPolicy::DestinationType aDestination,
+    IntegrityViolationReason aReason) const {
   if (!mDocument) {
     return;
   }
@@ -503,7 +504,8 @@ void IntegrityPolicyWAICT::ReportViolation(
   for (const nsCString& endpoint : mEndpoints) {
     RefPtr<IntegrityViolationReportBody> body =
         new IntegrityViolationReportBody(global, documentURL, blockedURL,
-                                         destination, !mEnforce);
+                                         destination, !mEnforce,
+                                         Nullable(aReason));
 
     ReportingUtils::Report(global, nsGkAtoms::integrity_violation,
                            NS_ConvertUTF8toUTF16(endpoint), documentURLUTF16,
