@@ -56,7 +56,7 @@
     assert_false(result.ran, 'Script should not execute when blocked');
 
     // Check integrity violation reports
-    checkIntegrityViolationReport(result.reports, 'incorrect.js', false);
+    checkIntegrityViolationReport(result.reports, 'incorrect.js', false, "no_manifest_match");
   }, 'Script with incorrect hash should fail to load (enforce mode)');
 
   // Test 3: Script with correct hash in any_hashes
@@ -85,7 +85,7 @@
     assert_false(result.ran, 'Script should not execute when blocked');
 
     // Check integrity violation reports
-    checkIntegrityViolationReport(result.reports, 'incorrect_wildcards.js', false);
+    checkIntegrityViolationReport(result.reports, 'incorrect_wildcards.js', false, "no_manifest_match");
   }, 'Script with wrong hash in any_hashes should fail to load (enforce mode)');
 
   // Test 5: Script not in manifest at all
@@ -100,7 +100,7 @@
     assert_false(result.ran, 'Script should not execute when blocked');
 
     // Check integrity violation reports
-    checkIntegrityViolationReport(result.reports, 'no_hash.js', false);
+    checkIntegrityViolationReport(result.reports, 'no_hash.js', false, "missing_from_manifest");
   }, 'Script not in manifest should fail to load (enforce mode)');
 
   // Test 6: Script with malformed header (missing blocked-destinations parameter)
@@ -187,7 +187,7 @@
     assert_false(result.ran, 'Script should not execute when blocked');
 
     // Check integrity violation reports
-    checkIntegrityViolationReport(result.reports, 'incorrect.js', false);
+    checkIntegrityViolationReport(result.reports, 'incorrect.js', false, "no_manifest_match");
   }, 'Script with incorrect hash should be blocked even when header missing optional preload field (enforce mode)');
 
   // Test 13: Script with nonexistent manifest file

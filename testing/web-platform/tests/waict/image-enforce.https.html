@@ -77,7 +77,7 @@
     assert_equals(imageResult, 'failed', 'Image should be blocked in enforce mode when hash does not match');
 
     // Check integrity violation reports
-    checkIntegrityViolationReport(reports, 'incorrect.png', false);
+    checkIntegrityViolationReport(reports, 'incorrect.png', false, "no_manifest_match");
   }, 'Image with wrong hash should fail to load and generate hash mismatch error (enforce mode)');
 
 
@@ -138,7 +138,7 @@
     assert_equals(imageResult, 'failed', 'Image should be blocked when hash in any_hashes does not match');
 
     // Check integrity violation reports
-    checkIntegrityViolationReport(reports, 'incorrect_wildcards.png', false);
+    checkIntegrityViolationReport(reports, 'incorrect_wildcards.png', false, "no_manifest_match");
   }, 'Image with wrong hash in any_hashes should fail to load (enforce mode)');
 
   // Test 5: Image not in manifest at all
@@ -174,7 +174,7 @@
     assert_equals(imageResult, 'failed', 'Image should be blocked when not in manifest');
 
     // Check integrity violation reports
-    checkIntegrityViolationReport(reports, 'no_hash.png', false);
+    checkIntegrityViolationReport(reports, 'no_hash.png', false, "missing_from_manifest");
   }, 'Image not in manifest should fail to load (enforce mode)');
 </script>
 </body>

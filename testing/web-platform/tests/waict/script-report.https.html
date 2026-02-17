@@ -59,7 +59,7 @@
         assert_true(result.ran, 'Script should execute in report mode');
 
         // Check integrity violation reports
-        checkIntegrityViolationReport(result.reports, 'incorrect.js', true);
+        checkIntegrityViolationReport(result.reports, 'incorrect.js', true, "no_manifest_match");
       }, 'Script with incorrect hash should load but generate violation (report mode)');
       
       // Test 3: Script with correct hash in any_hashes
@@ -87,7 +87,7 @@
         assert_true(result.loaded, 'Script should load in report mode even when hash in any_hashes does not match');
         assert_true(result.ran, 'Script should execute in report mode');
         // Check integrity violation reports
-        checkIntegrityViolationReport(result.reports, 'incorrect_wildcards.js', true);
+        checkIntegrityViolationReport(result.reports, 'incorrect_wildcards.js', true, "no_manifest_match");
       }, 'Script with wrong hash in any_hashes should load but generate violation (report mode)');
       
       // Test 5: Script not in manifest at all
@@ -101,7 +101,7 @@
         assert_true(result.loaded, 'Script should load in report mode even when not in manifest');
         assert_true(result.ran, 'Script should execute in report mode');
         // Check integrity violation reports
-        checkIntegrityViolationReport(result.reports, 'no_hash.js', true);
+        checkIntegrityViolationReport(result.reports, 'no_hash.js', true, "missing_from_manifest");
       }, 'Script not in manifest should load but generate violation (report mode)');
 
      // Test 6: Script with malformed header (missing blocked-destinations parameter)
@@ -198,7 +198,7 @@
       assert_true(result.ran, 'Script should execute in report mode');
 
       // Check integrity violation reports
-      checkIntegrityViolationReport(result.reports, 'incorrect.js', true);
+      checkIntegrityViolationReport(result.reports, 'incorrect.js', true, "no_manifest_match");
     }, 'Script with incorrect hash should load but generate report even when header missing optional preload field (report mode)');
 
     // Test 13: Script with nonexistent manifest file

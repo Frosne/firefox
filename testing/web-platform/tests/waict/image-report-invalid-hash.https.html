@@ -41,7 +41,7 @@
     assert_equals(imageResult, 'loaded', 'Image should load in report mode even with invalid hash format in manifest');
 
     // Check integrity violation reports
-    checkIntegrityViolationReport(reports, 'correct.png', true);
+    checkIntegrityViolationReport(reports, 'correct.png', true, "invalid_manifest");
   }, 'Image should load but generate violation when manifest has invalid hash format even though images not in blocked-destinations (report mode)');
 </script>
 </body>

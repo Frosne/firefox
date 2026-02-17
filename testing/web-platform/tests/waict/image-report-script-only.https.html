@@ -34,7 +34,7 @@
     assert_true(window.ran, 'Script should execute in report mode even with invalid manifest');
 
     // Check integrity violation reports
-    checkIntegrityViolationReport(reports, 'correct.js', true);
+    checkIntegrityViolationReport(reports, 'correct.js', true, "invalid_manifest");
   }, 'Script with correct hash should execute in report mode but generate violation when manifest is invalid due to malformed image hash');
 </script>
 </body>
