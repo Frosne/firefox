@@ -7,8 +7,8 @@ This directory contains Web Platform Tests for the WAICT specification, which pr
 ### Image Tests
 - **`image-enforce.https.html`** - Tests image loading with WAICT policy in enforce mode (blocks non-compliant resources; reports violations)
 - **`image-report.https.html`** - Tests image loading with WAICT policy in report mode (allows resources but reports violations)
-- **`image-enforce-script-only.https.html`** - Tests that image hash is not validated when `blocked-destinations=(script)` and manifest is valid
-- **`image-report-script-only.https.html`** - Tests that image hash is not validated when `blocked-destinations=(script)` and manifest is valid (report mode)
+- **`image-enforce-script-only.https.html`** - Tests that scripts are blocked in enforce mode when manifest is invalid due to malformed image hash, even with `blocked-destinations=(script)`
+- **`image-report-script-only.https.html`** - Tests that scripts execute in report mode but generate violations when manifest is invalid due to malformed image hash, even with `blocked-destinations=(script)`
 - **`image-enforce-invalid-hash.https.html`** - Tests that invalid manifest (hash too long) blocks images even when `blocked-destinations=(script)` (enforce mode)
 - **`image-report-invalid-hash.https.html`** - Tests that invalid manifest (hash too long) generates reports even when `blocked-destinations=(script)` (report mode)
 - **`image-max-age-persist.https.html`** - Tests that WAICT policy persists within max-age period (downgrade protection)
@@ -53,10 +53,17 @@ Each test suite covers the following scenarios:
 13. **Nonexistent manifest file** - Header with `manifest` pointing to file that doesn't exist:
    - WAICT is disabled: resource loads normally without any reports in both modes
 
-#### Tested with Images
-10. **Resource type not in blocked-destinations** - Header with `blocked-destinations=(script)` and manifest contains image hashes:
-   - Manifest is valid, but image hash is not validated: images load normally without any reports in both modes
-11. **Invalid manifest with resource not in blocked-destinations** - Header with `blocked-destinations=(script)` and manifest has invalid hash format (too long):
+#### Tested with Scripts and Images
+10. **Invalid manifest affects all resources regardless of blocked-destinations** - Tests `image-enforce-script-only.https.html` and `image-report-script-only.https.html`:
+   - Header with `blocked-destinations=(script)`
+   - Manifest contains `correct.js` with correct hash and `incorrect.png` with malformed hash (too long, making manifest invalid)
+   - Even though images are NOT in blocked-destinations, the malformed image hash makes the entire manifest invalid
+   - This affects ALL resources, including scripts with correct hashes:
+     - In enforce mode: script with correct hash is blocked and generates violation report
+     - In report mode: script with correct hash executes but generates violation report
+
+11. **Invalid manifest with images** - Tests `image-enforce-invalid-hash.https.html` and `image-report-invalid-hash.https.html`:
+   - Header with `blocked-destinations=(script)` and manifest has invalid hash format (too long) for images:
    - Manifest is invalid, affecting all resources regardless of blocked-destinations:
      - In enforce mode: image is blocked and generates violation report
      - In report mode: image loads but generates violation report

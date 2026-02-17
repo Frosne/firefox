@@ -1,33 +1,40 @@
 <!doctype html>
 <meta charset="utf-8">
-<title>WAICT: Image test with blocked-destinations=(script) in report mode</title>
+<title>WAICT: Script test with blocked-destinations=(script) and invalid manifest in report mode</title>
 <script src="/resources/testharness.js"></script>
 <script src="/resources/testharnessreport.js"></script>
 <script src="/reporting/resources/report-helper.js"></script>
 <script src="resources/waict-test-helpers.js"></script>
 <body>
 <script>
-  // Test: Image with incorrect hash in manifest, but blocked-destinations=(script)
-  // Since images are not in blocked-destinations, image hash should not be validated
-  // Image should load successfully without any reports
+  // Test: Script with correct hash, but manifest is invalid due to malformed image hash
+  // blocked-destinations=(script) means only scripts are checked
+  // However, the malformed hash for incorrect.png makes the entire manifest invalid
+  // This affects ALL resources, even those with correct hashes
+  // Expected: Script executes in report mode but generates violation report
 
   promise_test(async t => {
     const reports = setupIntegrityViolationObserver(t);
 
-    const img = document.createElement('img');
-    const loadPromise = new Promise((resolve, reject) => {
-      img.onload = () => resolve();
-      img.onerror = () => reject(new Error('Image failed to load'));
+    window.ran = false;
+
+    const script = document.createElement('script');
+    const loadPromise = new Promise((resolve) => {
+      script.onload = () => resolve();
+      script.onerror = () => resolve(); // Also resolve on error to avoid hanging
     });
 
-    document.body.appendChild(img);
-    img.src = 'resources/correct.png';
+    script.src = 'resources/correct.js';
+    document.body.appendChild(script);
 
     await loadPromise;
-    assert_true(img.complete, 'Image should load successfully when not in blocked-destinations');
+    // Give time for script to execute and reports
+    await new Promise(resolve => t.step_timeout(resolve, 100));
 
-    // No reports should be generated because images are not in blocked-destinations
-    assert_equals(reports.length, 0, 'Should not generate any integrity violation reports when resource type not in blocked-destinations');
-  }, 'Image with incorrect hash in manifest should load without validation when blocked-destinations=(script)');
+    assert_true(window.ran, 'Script should execute in report mode even with invalid manifest');
+
+    // Check integrity violation reports
+    checkIntegrityViolationReport(reports, 'correct.js', true);
+  }, 'Script with correct hash should execute in report mode but generate violation when manifest is invalid due to malformed image hash');
 </script>
 </body>
