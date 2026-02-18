@@ -3,7 +3,7 @@
 <title>WAICT: Max-age downgrade protection test</title>
 <script src="/resources/testharness.js"></script>
 <script src="/resources/testharnessreport.js"></script>
-<script src="resources/waict-test-helpers.js"></script>
+<script src="../waict/resources/waict-test-helpers.js"></script>
 <body>
 <script>
     // Test that WAICT downgrade protection blocks document load when header is removed
@@ -19,7 +19,7 @@
         // Phase 1: Load with WAICT header (max-age=2)
         await new Promise((resolve) => {
             iframe.onload = resolve;
-            iframe.src = 'resources/waict-max-age.py?set&max-age=2';
+            iframe.src = '../waict/resources/waict-max-age.py?set&max-age=2';
         });
 
         // Wait a bit
@@ -43,7 +43,7 @@
             phase2LoadFailed = true;
         };
 
-        iframe.src = 'resources/waict-max-age.py';
+        iframe.src = '../waict/resources/waict-max-age.py';
 
         // Wait for either load or error
         await new Promise(resolve => t.step_timeout(resolve, 500));

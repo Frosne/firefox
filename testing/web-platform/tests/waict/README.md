@@ -21,6 +21,18 @@ This directory contains Web Platform Tests for the WAICT specification, which pr
 - **`script-enforce.https.html`** - Tests script loading with WAICT policy in enforce mode
 - **`script-report.https.html`** - Tests script loading with WAICT policy in report mode
 
+### Max-age Downgrade Protection Tests (Separate Directory)
+These tests are located in `testing/web-platform/tests/waict-downgrade-protection/` and should be run independently to avoid max-age cache interference with other WAICT tests.
+
+- **`image-max-age-downgrade-protection.https.html`** - Tests that document load is blocked when WAICT header is removed during max-age period (downgrade protection)
+- **`image-max-age-persist.https.html`** - Tests that WAICT policy persists when header continues to be sent during max-age period
+- **`image-max-age-expire.https.html`** - Tests that WAICT policy expires after max-age period
+
+To run these tests:
+```bash
+./mach wpt testing/web-platform/tests/waict-downgrade-protection/
+```
+
 ## Test Scenarios
 
 Each test suite covers the following scenarios:
@@ -64,19 +76,6 @@ Each test suite covers the following scenarios:
      - In enforce mode: image is blocked and generates violation report
      - In report mode: image loads but generates violation report
 
-### Max-age Downgrade Protection (Tested with Images, Enforce Mode)
-14. **Downgrade protection blocks document load** - `image-max-age-downgrade-protection.https.html`:
-   - Test loads a page with WAICT header (`max-age=90`), verifies image is blocked
-   - Then tries to load the same page WITHOUT WAICT header (within 90s)
-   - Expected: Document load fails (downgrade protection blocks removal of WAICT header during max-age period)
-15. **Policy persists when header continues to be sent** - `image-max-age-persist.https.html`:
-   - Test loads a page with WAICT header (`max-age=90`), verifies image is blocked
-   - Then loads the same page WITH WAICT header again (within 90s)
-   - Expected: Policy continues to apply, image remains blocked
-16. **Policy expires after max-age** - `image-max-age-expire.https.html`:
-   - Test loads a page with WAICT header (`max-age=1`), verifies image is blocked
-   - Waits 2+ seconds, then loads the same page WITHOUT WAICT header
-   - Expected: max-age has expired, image now loads normally (no downgrade protection)
 ### Origin Validation (Tested with Images, Enforce Mode)
 17. **Cross-origin WAICT headers are ignored** - `image-cross-origin-header-ignored.https.html`:
    - Spec requirement: "We only care about this header if it's received from a path that matches the top-level origin. E.g. we're on foo.com and this header is set on the response for foo.com/index.html. We want to ignore this header if it's received from another origin, e.g. cdn.com/resource.js."

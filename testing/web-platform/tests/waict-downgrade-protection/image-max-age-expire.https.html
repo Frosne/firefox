@@ -3,7 +3,7 @@
 <title>WAICT: Max-age expiration test</title>
 <script src="/resources/testharness.js"></script>
 <script src="/resources/testharnessreport.js"></script>
-<script src="resources/waict-test-helpers.js"></script>
+<script src="../waict/resources/waict-test-helpers.js"></script>
 <body>
 <script>
     // Test that WAICT policy expires after max-age period
@@ -30,7 +30,7 @@
         // Phase 1: Load with WAICT header (max-age=1)
         await new Promise((resolve) => {
             iframe.onload = resolve;
-            iframe.src = 'resources/waict-max-age.py?set&max-age=1';
+            iframe.src = '../waict/resources/waict-max-age.py?set&max-age=1';
         });
 
         // Wait a bit
@@ -47,7 +47,7 @@
         // Phase 2: Load same page WITHOUT WAICT header (policy should be expired)
         await new Promise((resolve) => {
             iframe.onload = resolve;
-            iframe.src = 'resources/waict-max-age.py';
+            iframe.src = '../waict/resources/waict-max-age.py';
         });
 
         // Wait a bit

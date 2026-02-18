@@ -84,7 +84,7 @@ bool IntegrityPolicyWAICT::MaybeCheckResourceIntegrity(
                         "WAICTHashMismatch", params);
           ReportViolation(aURI, aDestination,
                           IntegrityViolationReason::No_manifest_match);
-          return false;
+          return !mEnforce;
         }
 
         MOZ_LOG_FMT(
@@ -117,7 +117,7 @@ bool IntegrityPolicyWAICT::MaybeCheckResourceIntegrity(
                 "WAICTResourceNotInManifest", params);
   ReportViolation(aURI, aDestination,
                   IntegrityViolationReason::Missing_from_manifest);
-  return false;
+  return !mEnforce;
 }
 
 /* static */

@@ -3,7 +3,7 @@
 <title>WAICT: Max-age persistence test (with header)</title>
 <script src="/resources/testharness.js"></script>
 <script src="/resources/testharnessreport.js"></script>
-<script src="resources/waict-test-helpers.js"></script>
+<script src="../waict/resources/waict-test-helpers.js"></script>
 <body>
 <script>
     // Test that WAICT policy persists within max-age period when header continues to be sent
@@ -19,7 +19,7 @@
         // Phase 1: Load with WAICT header (max-age=2)
         await new Promise((resolve) => {
             iframe.onload = resolve;
-            iframe.src = 'resources/waict-max-age.py?set&max-age=2';
+            iframe.src = '../waict/resources/waict-max-age.py?set&max-age=2';
         });
 
         // Wait a bit
@@ -33,7 +33,7 @@
         // Phase 2: Load same page WITH WAICT header again (within max-age period)
         await new Promise((resolve) => {
             iframe.onload = resolve;
-            iframe.src = 'resources/waict-max-age.py?set&max-age=2';
+            iframe.src = '../waict/resources/waict-max-age.py?set&max-age=2';
         });
 
         // Wait a bit

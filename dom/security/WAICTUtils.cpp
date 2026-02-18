@@ -66,7 +66,7 @@ nsresult ParseMode(nsISFVDictionary* aDict, bool* outEnforce) {
         *outEnforce = true;
         return NS_OK;
       }
-      if (token.EqualsLiteral("audit")) {
+      if (token.EqualsLiteral("report")) {
         *outEnforce = false;
         return NS_OK;
       }
