@@ -1,0 +1,66 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>WAICT: Navigation between pages with different manifests</title>
+<script src="/resources/testharness.js"></script>
+<script src="/resources/testharnessreport.js"></script>
+<script src="resources/waict-test-helpers.js"></script>
+<body>
+<script>
+  // Test that navigating between pages on the same origin correctly switches manifests
+  promise_test(async t => {
+    const iframe = document.createElement('iframe');
+    document.body.appendChild(iframe);
+    t.add_cleanup(() => iframe.remove());
+
+    // Phase 1: Load page1 (uses manifest-page1.json)
+    await new Promise((resolve) => {
+      iframe.onload = resolve;
+      iframe.src = 'resources/page-with-manifest1.html';
+    });
+
+    // Wait for images to load/fail
+    await new Promise(resolve => t.step_timeout(resolve, 500));
+
+    // Verify we're on page1
+    assert_true(iframe.contentDocument.title.includes('Page 1'), 'Should be on Page 1');
+
+    // Check image loading on page1
+    const page1img1 = iframe.contentDocument.getElementById('img1');
+    const page1img2 = iframe.contentDocument.getElementById('img2');
+
+    const img1LoadedOnPage1 = page1img1.complete && page1img1.naturalHeight > 0;
+    const img2LoadedOnPage1 = page1img2.complete && page1img2.naturalHeight > 0;
+
+    assert_true(img1LoadedOnPage1, 'Page 1: page1.png should load (hash in manifest-page1.json)');
+    assert_false(img2LoadedOnPage1, 'Page 1: page2.png should be blocked (not in manifest-page1.json)');
+
+    // Phase 2: Navigate to page2 by clicking the link
+    const link = iframe.contentDocument.getElementById('nav-link');
+    assert_true(!!link, 'Page 1 should have a navigation link');
+
+    const navigationPromise = new Promise((resolve) => {
+      iframe.onload = resolve;
+    });
+
+    link.click();
+    await navigationPromise;
+
+    // Wait for images to load/fail
+    await new Promise(resolve => t.step_timeout(resolve, 500));
+
+    // Verify we're now on page2
+    assert_true(iframe.contentDocument.title.includes('Page 2'), 'Should have navigated to Page 2');
+
+    // Check image loading on page2
+    const page2img1 = iframe.contentDocument.getElementById('img1');
+    const page2img2 = iframe.contentDocument.getElementById('img2');
+
+    const img1LoadedOnPage2 = page2img1.complete && page2img1.naturalHeight > 0;
+    const img2LoadedOnPage2 = page2img2.complete && page2img2.naturalHeight > 0;
+
+    assert_false(img1LoadedOnPage2, 'Page 2: page1.png should be blocked (not in manifest-page2.json)');
+    assert_true(img2LoadedOnPage2, 'Page 2: page2.png should load (hash in manifest-page2.json)');
+
+  }, 'Navigating from page1 to page2 correctly switches WAICT manifests (page1.png → page2.png)');
+</script>
+</body>

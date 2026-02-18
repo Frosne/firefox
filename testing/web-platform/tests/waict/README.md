@@ -22,19 +22,14 @@ This directory contains Web Platform Tests for the WAICT specification, which pr
 - **`script-report.https.html`** - Tests script loading with WAICT policy in report mode
 
 ### Navigation Between WAICT-Supported Pages
-These tests verify that each page correctly uses its own manifest when navigating between different pages on the same origin.
+This test verifies that navigating between pages on the same origin correctly switches manifests.
 
-- **`image-different-manifests-page1.https.html`** - Page 1 with manifest-page1.json
-  - Loads page1.png ✅ (correct hash in manifest)
-  - Blocks page2.png ❌ (not in manifest)
-  - Contains link to navigate to Page 2
-  - Tests that each page enforces its own manifest independently
-
-- **`image-different-manifests-page2.https.html`** - Page 2 with manifest-page2.json
-  - Blocks page1.png ❌ (not in manifest)
-  - Loads page2.png ✅ (correct hash in manifest)
-  - Contains link to navigate back to Page 1
-  - Tests that navigation properly switches manifests
+- **`image-navigation-different-manifests.https.html`** - Navigation test with different manifests
+  - Loads page1 with manifest-page1.json in an iframe
+  - Verifies page1.png loads ✅ and page2.png is blocked ❌ (manifest-page1.json)
+  - Navigates to page2 by clicking a link
+  - Verifies page2.png loads ✅ and page1.png is blocked ❌ (manifest-page2.json)
+  - Tests that navigation properly switches between manifests
 
 ### Max-age Downgrade Protection Tests (Separate Directory)
 These tests are located in `testing/web-platform/tests/waict-downgrade-protection/` and should be run independently to avoid max-age cache interference with other WAICT tests.
