@@ -142,7 +142,7 @@
     assert_equals(imageResult, 'loaded', 'Image should load in report mode even with wrong hash in any_hashes');
 
     // Check integrity violation reports
-    checkIntegrityViolationReport(reports, 'incorrect_wildcards.png', true, "no_manifest_match");
+    checkIntegrityViolationReport(reports, 'incorrect_wildcards.png', true, "missing_from_manifest");
   }, 'Image with wrong hash in any_hashes should still load but generate violation (report mode)');
 
   // Test 5: Image not in manifest at all
