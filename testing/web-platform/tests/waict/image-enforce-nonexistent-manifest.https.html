@@ -1,16 +1,12 @@
 <!doctype html>
 <meta charset="utf-8">
-<title>WAICT: Image test with invalid hash format in manifest (report mode)</title>
+<title>WAICT: Image test with nonexistent manifest (enforce mode)</title>
 <script src="/resources/testharness.js"></script>
 <script src="/resources/testharnessreport.js"></script>
 <script src="/reporting/resources/report-helper.js"></script>
 <script src="resources/waict-test-helpers.js"></script>
 <body>
 <script>
-  // Test: Manifest with invalid hash format (too long), blocked-destinations=(image)
-  // Invalid hash causes manifest validation to fail
-  // In report mode: image should load but generate violation report
-
   promise_test(async t => {
     const reports = setupIntegrityViolationObserver(t);
 
@@ -33,14 +29,11 @@
 
     await imagePromise;
 
-    // Wait a bit for reports
     await new Promise(resolve => t.step_timeout(resolve, 100));
 
-    // In report mode, image SHOULD load even with invalid manifest
-    assert_equals(imageResult, 'loaded', 'Image should load in report mode even with invalid hash format in manifest');
+    assert_equals(imageResult, 'failed', 'Image should be blocked when manifest file does not exist (enforce mode)');
 
-    // Check integrity violation reports
-    checkIntegrityViolationReport(reports, 'correct.png', true, "invalid_manifest");
-  }, 'Image should load but generate violation when manifest has invalid hash format for another resource (blocked-destinations=(image), report mode)');
+    checkIntegrityViolationReport(reports, 'correct.png', false, "manifest_unavailable");
+  }, 'Image should be blocked when manifest file does not exist (enforce mode)');
 </script>
 </body>

@@ -7,9 +7,22 @@
 <body>
 <script>
     // Test that WAICT headers from cross-origin resources are ignored
-    // Top-level page: origin A (no WAICT header)
-    // Iframe: origin B (WITH WAICT header in enforce mode)
-    // Expected: WAICT header from origin B is ignored because it doesn't match top-level origin
+    //
+    // Spec says:
+    // "We only care about this header if it's received from a path that matches the top-level origin.
+    //  E.g. we're on foo.com and this header is set on the response for foo.com/index.html.
+    //  We want to ignore this header if it's received from another origin, e.g. cdn.com/resource.js."
+    //
+    // Setup:
+    // - Top-level page (this page): origin A, NO WAICT header
+    // - Cross-origin iframe: origin B (HTTPS_REMOTE_ORIGIN), HAS WAICT header
+    // - WAICT header on iframe: mode=enforce, blocked-destinations=(image)
+    // - Iframe loads image "incorrect.png" which has wrong hash in manifest
+    //
+    // Expected behavior per spec:
+    // - WAICT header from origin B should be IGNORED (doesn't match top-level origin)
+    // - Image should LOAD even though it has incorrect hash in manifest
+    // - This is because only same-origin (top-level origin) WAICT headers should be respected
 
     promise_test(async t => {
         const host_info = get_host_info();

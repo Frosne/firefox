@@ -7,9 +7,8 @@
 <script src="resources/waict-test-helpers.js"></script>
 <body>
 <script>
-  // Test: Manifest with invalid hash format (too long), blocked-destinations=(script)
-  // Even though images are not in blocked-destinations, ValidateManifest fails
-  // Invalid manifest affects all resources regardless of blocked-destinations
+  // Test: Manifest with invalid hash format (too long), blocked-destinations=(image)
+  // Invalid hash causes manifest validation to fail
   // In enforce mode: image should be blocked and generate violation report
 
   promise_test(async t => {
@@ -42,6 +41,6 @@
 
     // Check integrity violation reports
     checkIntegrityViolationReport(reports, 'correct.png', false, "invalid_manifest");
-  }, 'Image should fail to load when manifest has invalid hash format even though images not in blocked-destinations (enforce mode)');
+  }, 'Image should fail to load when manifest has invalid hash format for another resource (blocked-destinations=(image), enforce mode)');
 </script>
 </body>

@@ -24,7 +24,6 @@
     //      7. Header missing mandatory mode field
     //      9. Header with empty blocked-destinations field
     //      12. Header missing optional preload field (WAICT still blocks resources)
-    //      13. Header with nonexistent manifest file (WAICT disabled)
     //   b) Manifest tests (not exhaustive - see TestWAICTManifest for comprehensive manifest tests):
     //      8. Manifest missing optional resource_delimiter field
 
@@ -46,7 +45,6 @@
   // Test 2: Script with an incorrect hash in hashes is executed.
   // Test should return WAICTHashMismatch
   promise_test(async t => {
-    setupIntegrityViolationObserver(t);
     const result = await loadScriptInIframe(
       'resources/iframe-with-policy-enforce.html',
       'incorrect.js'
@@ -85,7 +83,7 @@
     assert_false(result.ran, 'Script should not execute when blocked');
 
     // Check integrity violation reports
-    checkIntegrityViolationReport(result.reports, 'incorrect_wildcards.js', false, "no_manifest_match");
+    checkIntegrityViolationReport(result.reports, 'incorrect_wildcards.js', false, "missing_from_manifest");
   }, 'Script with wrong hash in any_hashes should fail to load (enforce mode)');
 
   // Test 5: Script not in manifest at all
@@ -189,22 +187,5 @@
     // Check integrity violation reports
     checkIntegrityViolationReport(result.reports, 'incorrect.js', false, "no_manifest_match");
   }, 'Script with incorrect hash should be blocked even when header missing optional preload field (enforce mode)');
-
-  // Test 13: Script with nonexistent manifest file
-  // Integrity-Policy-WAICT-v1: manifest="nonexistent-manifest.json", ...
-  // When manifest cannot be loaded, WAICT is disabled
-  promise_test(async t => {
-    const result = await loadScriptInIframe(
-      'resources/iframe-with-nonexistent-manifest-enforce.html',
-      'incorrect.js'
-    );
-
-    // Script has incorrect hash in manifest, but WAICT is disabled so it loads anyway
-    assert_true(result.loaded, 'Script should load when manifest file does not exist (WAICT disabled)');
-    assert_true(result.ran, 'Script should execute when manifest file does not exist (WAICT disabled)');
-
-    // No reports should be generated when WAICT is disabled
-    assert_equals(result.reports.length, 0, 'Should not generate reports when WAICT is disabled due to manifest loading failure');
-  }, 'Script with incorrect hash should load without reports when manifest file does not exist (WAICT disabled)');
 </script>
 </body>

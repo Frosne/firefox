@@ -15,7 +15,7 @@ def main(request, response):
         max_age = request.GET.get(b"max-age", b"90")
         # Get mode from query params, default to enforce
         mode = request.GET.get(b"mode", b"enforce")
-        header_value = b"manifest=\"waict-manifest.json\", blocked-destinations=(image), mode=" + mode + b", max-age=" + max_age
+        header_value = b"manifest=\"waict-manifest.json\", blocked-destinations=(image), mode=" + mode + b", endpoints=(default), max-age=" + max_age
         headers.append((b"Integrity-Policy-WAICT-v1", header_value))
 
     # Return simple HTML with test image

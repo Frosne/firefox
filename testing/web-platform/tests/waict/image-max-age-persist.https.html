@@ -1,25 +1,25 @@
 <!DOCTYPE html>
 <meta charset="utf-8">
-<title>WAICT: Max-age persistence test</title>
+<title>WAICT: Max-age persistence test (with header)</title>
 <script src="/resources/testharness.js"></script>
 <script src="/resources/testharnessreport.js"></script>
 <script src="resources/waict-test-helpers.js"></script>
 <body>
 <script>
-    // Test that WAICT policy persists within max-age period
-    // This test automatically loads a page with WAICT header (max-age=90),
-    // then loads the same page without WAICT header (within 90s).
-    // Expected: Cached policy should still block the image
+    // Test that WAICT policy persists within max-age period when header continues to be sent
+    // Phase 1: Load page with WAICT header (max-age=90)
+    // Phase 2: Load same page WITH WAICT header again (within 90s)
+    // Expected: Policy continues to apply, image remains blocked
 
     promise_test(async t => {
         const iframe = document.createElement('iframe');
         document.body.appendChild(iframe);
         t.add_cleanup(() => iframe.remove());
 
-        // Phase 1: Load with WAICT header (max-age=90)
+        // Phase 1: Load with WAICT header (max-age=2)
         await new Promise((resolve) => {
             iframe.onload = resolve;
-            iframe.src = 'resources/waict-max-age.py?set&max-age=90';
+            iframe.src = 'resources/waict-max-age.py?set&max-age=2';
         });
 
         // Wait a bit
@@ -30,10 +30,10 @@
 
         assert_equals(phase1Result, 'blocked', 'Phase 1: Image should be blocked with WAICT header present');
 
-        // Phase 2: Load same page WITHOUT WAICT header (policy should persist)
+        // Phase 2: Load same page WITH WAICT header again (within max-age period)
         await new Promise((resolve) => {
             iframe.onload = resolve;
-            iframe.src = 'resources/waict-max-age.py';
+            iframe.src = 'resources/waict-max-age.py?set&max-age=2';
         });
 
         // Wait a bit
@@ -42,8 +42,11 @@
         let phase2Image = iframe.contentDocument.getElementById('test-image');
         let phase2Result = phase2Image.complete && phase2Image.naturalHeight === 0 ? 'blocked' : 'loaded';
 
-        assert_equals(phase2Result, 'blocked', 'Phase 2: Image should still be blocked due to cached policy (within max-age=90)');
+        assert_equals(phase2Result, 'blocked', 'Phase 2: Image should still be blocked (WAICT policy continues to apply)');
 
-    }, 'WAICT policy with max-age=90 persists when header is removed (downgrade protection)');
+        // Wait for max-age to expire so subsequent tests don't interfere
+        await new Promise(resolve => t.step_timeout(resolve, 5000));
+
+    }, 'WAICT policy persists when header continues to be sent (within max-age period)');
 </script>
 </body>

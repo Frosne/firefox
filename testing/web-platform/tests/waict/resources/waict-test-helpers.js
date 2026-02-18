@@ -23,7 +23,14 @@ function setupIntegrityViolationObserver(t = null) {
 // Verifies report type, blocked URL, reportOnly flag, and optionally the violation reason
 // Reason values: "manifest_unavailable", "invalid_manifest", "missing_from_manifest", "no_manifest_match", etc.
 function checkIntegrityViolationReport(reports, expectedURL, reportOnly, reason) {
-  assert_equals(reports.length, 1, 'Should generate exactly one integrity violation report');
+  let reportDetails = '';
+  if (reports.length !== 1) {
+    reportDetails = ' Got ' + reports.length + ' reports: ';
+    for (let i = 0; i < reports.length; i++) {
+      reportDetails += '[' + i + ': ' + reports[i].body.blockedURL + ' reason=' + reports[i].body.reason + '] ';
+    }
+  }
+  assert_equals(reports.length, 1, 'Should generate exactly one integrity violation report' + reportDetails);
   const report = reports[0];
   assert_equals(report.type, 'integrity-violation', 'Report type should be integrity-violation');
   assert_true(report.body.blockedURL.includes(expectedURL), 'Report should reference the blocked resource');
@@ -66,5 +73,10 @@ async function loadScriptInIframe(iframeSrc, scriptSrc) {
     src: scriptSrc
   }, '*');
 
-  return await resultPromise;
+  const result = await resultPromise;
+
+  // Clean up the iframe to prevent state leaking between tests
+  iframe.remove();
+
+  return result;
 }

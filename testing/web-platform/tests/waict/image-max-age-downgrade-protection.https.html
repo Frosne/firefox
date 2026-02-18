@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<title>WAICT: Max-age downgrade protection test</title>
+<script src="/resources/testharness.js"></script>
+<script src="/resources/testharnessreport.js"></script>
+<script src="resources/waict-test-helpers.js"></script>
+<body>
+<script>
+    // Test that WAICT downgrade protection blocks document load when header is removed
+    // Phase 1: Load page with WAICT header (max-age=90)
+    // Phase 2: Try to load same page WITHOUT WAICT header (within 90s)
+    // Expected: Document load should fail (downgrade protection)
+
+    promise_test(async t => {
+        const iframe = document.createElement('iframe');
+        document.body.appendChild(iframe);
+        t.add_cleanup(() => iframe.remove());
+
+        // Phase 1: Load with WAICT header (max-age=2)
+        await new Promise((resolve) => {
+            iframe.onload = resolve;
+            iframe.src = 'resources/waict-max-age.py?set&max-age=2';
+        });
+
+        // Wait a bit
+        await new Promise(resolve => t.step_timeout(resolve, 100));
+
+        let phase1Image = iframe.contentDocument.getElementById('test-image');
+        let phase1Result = phase1Image.complete && phase1Image.naturalHeight === 0 ? 'blocked' : 'loaded';
+
+        assert_equals(phase1Result, 'blocked', 'Phase 1: Image should be blocked with WAICT header present');
+
+        // Phase 2: Try to load same page WITHOUT WAICT header (within max-age period)
+        // This should trigger downgrade protection and break the document load
+        let phase2LoadFailed = false;
+        let phase2Loaded = false;
+
+        iframe.onload = () => {
+            phase2Loaded = true;
+        };
+
+        iframe.onerror = () => {
+            phase2LoadFailed = true;
+        };
+
+        iframe.src = 'resources/waict-max-age.py';
+
+        // Wait for either load or error
+        await new Promise(resolve => t.step_timeout(resolve, 500));
+
+        // The document load should fail due to downgrade protection
+        // We can't reliably detect iframe load errors, so we check if contentDocument is accessible
+        // If downgrade protection worked, contentDocument should be null or the document should show an error
+        let canAccessDocument = false;
+        try {
+            if (iframe.contentDocument && iframe.contentDocument.getElementById('test-image')) {
+                canAccessDocument = true;
+            }
+        } catch (e) {
+            // SecurityError or other error means document didn't load properly
+            canAccessDocument = false;
+        }
+
+        assert_false(canAccessDocument,
+            'Phase 2: Document load should fail when WAICT header is removed during max-age period (downgrade protection)');
+
+        // Wait for max-age to expire so subsequent tests don't interfere
+        await new Promise(resolve => t.step_timeout(resolve, 5000));
+
+    }, 'WAICT downgrade protection blocks document load when header is removed within max-age period');
+</script>
+</body>

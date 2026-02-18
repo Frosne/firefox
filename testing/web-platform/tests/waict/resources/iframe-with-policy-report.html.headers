@@ -1,1 +1,2 @@
+Reporting-Endpoints: default="/reporting/resources/report.py?endpoint=default"
 Integrity-Policy-WAICT-v1: manifest="waict-manifest.json", blocked-destinations=(script), mode=report, endpoints=(default), max-age=90

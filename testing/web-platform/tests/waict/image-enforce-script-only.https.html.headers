@@ -1,1 +1,0 @@
-Integrity-Policy-WAICT-v1: manifest="resources/waict-manifest-script-only-invalid.json", blocked-destinations=(script), mode=enforce, endpoints=(default), max-age=90

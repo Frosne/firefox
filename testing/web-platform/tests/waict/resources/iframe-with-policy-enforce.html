@@ -21,7 +21,14 @@ window.addEventListener('message', function(event) {
           type: 'scriptResult',
           loaded: true,
           ran: window.ran,
-          reports: reports
+          reports: reports.map(r => ({
+            type: r.type,
+            body: {
+              blockedURL: r.body.blockedURL,
+              reportOnly: r.body.reportOnly,
+              reason: r.body.reason
+            }
+          }))
         }, '*');
       }, 100);
     };
@@ -31,7 +38,14 @@ window.addEventListener('message', function(event) {
           type: 'scriptResult',
           loaded: false,
           ran: window.ran,
-          reports: reports
+          reports: reports.map(r => ({
+            type: r.type,
+            body: {
+              blockedURL: r.body.blockedURL,
+              reportOnly: r.body.reportOnly,
+              reason: r.body.reason
+            }
+          }))
         }, '*');
       }, 100);
     };
