@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<title>WAICT: Max-age downgrade in report mode (no blocking)</title>
+<script src="/resources/testharness.js"></script>
+<script src="/resources/testharnessreport.js"></script>
+<script src="../waict/resources/waict-test-helpers.js"></script>
+<body>
+<script>
+    // Test that WAICT downgrade protection in REPORT mode does NOT block document load
+    // Phase 1: Load page with WAICT header (mode=report, max-age=90)
+    // Phase 2: Try to load same page WITHOUT WAICT header (within max-age period)
+    // Expected: Document load should SUCCEED (no blocking in report mode)
+    //           But a violation report should be generated
+
+    promise_test(async t => {
+        const reports = setupIntegrityViolationObserver(t);
+        const iframe = document.createElement('iframe');
+        document.body.appendChild(iframe);
+        t.add_cleanup(() => iframe.remove());
+
+        // Phase 1: Load with WAICT header in report mode (max-age=90)
+        await new Promise((resolve) => {
+            iframe.onload = resolve;
+            iframe.src = '../waict/resources/waict-max-age.py?set&mode=report';
+        });
+
+        // Wait a bit
+        await new Promise(resolve => t.step_timeout(resolve, 100));
+
+        let phase1Image = iframe.contentDocument.getElementById('test-image');
+        let phase1Result = phase1Image.complete && phase1Image.naturalHeight === 0 ? 'blocked' : 'loaded';
+
+        // In report mode, image should load even with incorrect hash
+        assert_equals(phase1Result, 'loaded', 'Phase 1: Image should load in report mode (incorrect hash generates report but does not block)');
+
+        // Phase 2: Try to load same page WITHOUT WAICT header (within max-age period)
+        // In report mode, this should NOT block the document load
+        let phase2Loaded = false;
+
+        iframe.onload = () => {
+            phase2Loaded = true;
+        };
+
+        iframe.src = '../waict/resources/waict-max-age.py';
+
+        // Wait for load
+        await new Promise(resolve => t.step_timeout(resolve, 500));
+
+        // The document load should SUCCEED in report mode
+        let canAccessDocument = false;
+        try {
+            if (iframe.contentDocument && iframe.contentDocument.getElementById('test-image')) {
+                canAccessDocument = true;
+            }
+        } catch (e) {
+            canAccessDocument = false;
+        }
+
+        assert_true(canAccessDocument,
+            'Phase 2: Document load should SUCCEED in report mode even when WAICT header is removed (no blocking, only reporting)');
+        assert_true(phase2Loaded, 'Phase 2: iframe onload should fire');
+
+        // Wait for violation reports
+        await new Promise(resolve => t.step_timeout(resolve, 200));
+
+        // Should have a downgrade protection violation report
+        assert_greater_than(reports.length, 0, 'Should generate violation report for downgrade in report mode');
+
+        // Check that one of the reports is about the downgrade
+        const hasDowngradeReport = reports.some(report =>
+            report.body && report.body.reason &&
+            (report.body.reason.includes('downgrade') || report.body.reason.includes('missing_header'))
+        );
+        assert_true(hasDowngradeReport, 'Should have a downgrade protection violation report');
+
+        // Wait for max-age to expire so subsequent tests don't interfere
+        await new Promise(resolve => t.step_timeout(resolve, 5000));
+
+    }, 'WAICT downgrade protection in report mode allows load but generates violation report');
+</script>
+</body>

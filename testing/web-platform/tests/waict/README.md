@@ -39,7 +39,8 @@ These tests verify that each page correctly uses its own manifest when navigatin
 ### Max-age Downgrade Protection Tests (Separate Directory)
 These tests are located in `testing/web-platform/tests/waict-downgrade-protection/` and should be run independently to avoid max-age cache interference with other WAICT tests.
 
-- **`image-max-age-downgrade-protection.https.html`** - Tests that document load is blocked when WAICT header is removed during max-age period (downgrade protection)
+- **`image-max-age-downgrade-enforce.https.html`** - Tests that document load is blocked when WAICT header is removed during max-age period in enforce mode (downgrade protection blocks)
+- **`image-max-age-downgrade-report-mode.https.html`** - Tests that document load succeeds with violation report when WAICT header is removed during max-age period in report mode (downgrade protection reports)
 - **`image-max-age-persist.https.html`** - Tests that WAICT policy persists when header continues to be sent during max-age period
 - **`image-max-age-expire.https.html`** - Tests that WAICT policy expires after max-age period
 

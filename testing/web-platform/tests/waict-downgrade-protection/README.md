@@ -15,10 +15,15 @@ By running these tests separately, we ensure:
 
 ## Test Files
 
-- **`image-max-age-downgrade-protection.https.html`** - Tests that document load is blocked when WAICT header is removed during max-age period
-  - Phase 1: Load with WAICT header (max-age=2), verify image blocked
+- **`image-max-age-downgrade-enforce.https.html`** - Tests that document load is blocked when WAICT header is removed during max-age period (enforce mode)
+  - Phase 1: Load with WAICT header (mode=enforce, max-age=2), verify image blocked
   - Phase 2: Try to load WITHOUT header (within max-age), expect document load to fail
-  - This tests downgrade protection - preventing removal of WAICT during max-age period
+  - This tests downgrade protection in enforce mode - blocks when WAICT header is removed
+
+- **`image-max-age-downgrade-report-mode.https.html`** - Tests that document load succeeds with violation report when WAICT header is removed (report mode)
+  - Phase 1: Load with WAICT header (mode=report, max-age=90), verify image loads (report mode)
+  - Phase 2: Try to load WITHOUT header (within max-age), expect document load to SUCCEED but generate violation report
+  - This tests downgrade protection in report mode - allows load but reports violation
 
 - **`image-max-age-persist.https.html`** - Tests that WAICT policy persists when header continues to be sent
   - Phase 1: Load with WAICT header (max-age=2), verify image blocked
@@ -52,7 +57,9 @@ Run these tests separately from the main WAICT tests:
 - Protection is stored per origin (host-based, not per-path)
 - When a URI has active max-age protection:
   - Subsequent loads WITH a WAICT header: allowed (policy is updated/continued)
-  - Subsequent loads WITHOUT a WAICT header: **blocked** (downgrade protection)
+  - Subsequent loads WITHOUT a WAICT header (downgrade protection):
+    - **Enforce mode**: Document load is **blocked**
+    - **Report mode**: Document load **succeeds** but generates a violation report
 
 ### Resource Dependencies
 These tests use resources from the main WAICT directory:
