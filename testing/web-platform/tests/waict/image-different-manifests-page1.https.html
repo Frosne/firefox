@@ -1,0 +1,79 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>WAICT: Different manifests - Page 1</title>
+<script src="/resources/testharness.js"></script>
+<script src="/resources/testharnessreport.js"></script>
+<script src="resources/waict-test-helpers.js"></script>
+<body>
+<h1>Page 1 (manifest-page1.json)</h1>
+<p>This page uses manifest-page1.json which only contains page1.png hash</p>
+<p><strong>Expected behavior: This page tries to load 2 images:</strong></p>
+<ul>
+  <li>✅ page1.png should load (hash is in manifest-page1.json)</li>
+  <li>❌ page2.png should be blocked (not in manifest-page1.json)</li>
+</ul>
+<p><a href="image-different-manifests-page2.https.html">Navigate to Page 2</a></p>
+
+<div id="images-container">
+  <p>Images will be loaded here by the test...</p>
+</div>
+
+<script>
+  promise_test(async t => {
+    const reports = setupIntegrityViolationObserver(t);
+
+    // Load page1.png (correct hash in manifest-page1.json)
+    const img1 = document.createElement('img');
+    img1.id = 'img1';
+    let img1Result = null;
+
+    const img1Promise = new Promise((resolve) => {
+      img1.onload = () => {
+        img1Result = 'loaded';
+        resolve();
+      };
+      img1.onerror = () => {
+        img1Result = 'failed';
+        resolve();
+      };
+    });
+
+    document.body.appendChild(img1);
+    img1.src = 'resources/page1.png';
+
+    await img1Promise;
+
+    assert_equals(img1Result, 'loaded', 'page1.png should load (hash in manifest-page1.json)');
+
+    // Load page2.png (NOT in manifest-page1.json)
+    const img2 = document.createElement('img');
+    img2.id = 'img2';
+    let img2Result = null;
+
+    const img2Promise = new Promise((resolve) => {
+      img2.onload = () => {
+        img2Result = 'loaded';
+        resolve();
+      };
+      img2.onerror = () => {
+        img2Result = 'failed';
+        resolve();
+      };
+    });
+
+    document.body.appendChild(img2);
+    img2.src = 'resources/page2.png';
+
+    await img2Promise;
+
+    // Wait for reports
+    await new Promise(resolve => t.step_timeout(resolve, 100));
+
+    assert_equals(img2Result, 'failed', 'page2.png should be blocked (not in manifest-page1.json)');
+
+    // Check violation report for page2.png
+    checkIntegrityViolationReport(reports, 'page2.png', false, "missing_from_manifest");
+
+  }, 'Page 1: page1.png loads (in manifest), page2.png blocked (not in manifest)');
+</script>
+</body>
